@@ -118,6 +118,42 @@ class state {
 
 
 
+class state_hash {
+	public:
+		unsigned int last_coord;
+		unsigned int first_coord; 	
+		double score;
+		int cp;
+		double ncov,ccov,pcov;
+		state_hash(state s) {
+			last_coord = first_coord =0;
+			if (s.gpath_vector.size()>0) {
+				last_coord = s.gpath_vector.back().posb.coord;
+				first_coord = s.gpath_vector.front().posa.coord;
+			}
+			
+			score=s.score;
+			cp=s.cp;
+			ncov=s.ncov;
+			ccov=s.ccov;
+			pcov=s.pcov;
+		}
+		//opeartors
+		bool operator<(const state_hash &other) const {
+			if (last_coord+first_coord<other.last_coord+other.first_coord) {
+				return true;
+			}
+			return false;
+		}
+		bool operator==(const state_hash &other) const {
+			return memcmp(this,&other,sizeof(state_hash))==0;
+		}
+		size_t operator()(const state_hash &other) const {
+			return last_coord+first_coord;
+		}
+};
+
+
 //some global variables
 set<pos> bps;
 map<edge, edge_info > edges;
@@ -182,6 +218,7 @@ bool pos::operator!=(const pos &other) const {
 	return true;
 
 }
+
 
 
 //
@@ -361,7 +398,7 @@ void state::add_edge_to_score(edge e) {
 	//ok now lets add the thing back with a count+1
 	for (int i=MIN_FLOW; i<MAX_FLOW; i++) {
 		double eflow=abs(ei.normal_coverage*i*(count+1)-ei.cancer_coverage);
-		scores[i]-=ebase-eflow;
+		scores[i]+=ebase-eflow;
 	}
 }
 
@@ -518,17 +555,21 @@ double state::tail_check() {
 	vector<edge> ve;
 	vector<edge> ve_c;
 	unsigned int bp=0;
+
 	unsigned int i=0;
+
+	//this finds out how many edges from the back we need
 	for (; i<gpath_vector.size() && bp<bp_range; i++) {
 		edge e = gpath_vector[gpath_vector.size()-1-i];
 		bp+=e.length();
 	}
 	size_t nsize = gpath_vector.size()-i;
-	//double cc=0;
-	//double nc=0;
+
+	//make ve_c be the collection of these
 	for (unsigned int n=0; n<nsize; n++) {
 		ve_c.push_back(gpath_vector[n]);
 	}
+	//take the local path complement with respect to ve_c
 	/*for (; i>0; i--) {
 		edge e = gpath_vector[gpath_vector.size()-i];
 		cc+=edges[e].cancer_coverage;	
@@ -540,14 +581,9 @@ double state::tail_check() {
 	//state s = state(ve);
 	state s_c = state(ve_c);
 	
-	//edge z = edge(pos(0,0),pos(0,0));
-	//if (ve_c.size()>0) {
-	//	 z = ve_c[0];
-	//}
 	//cerr << "TAIL CHECK " << cc << " | " << nc << "((("  << i << " K "<< z.posa.chr << ":" << z.posa.coord << " "<< gpath_vector.size() << " vs " << nsize << " x " << this->score <<  " " << s_c.score << endl;
 
 	//double old_score=score_with_flow(s_c.cp);	
-
 	
 	//return bp_range*(old_score-s_c.score)/length();
 	return bp_range*score/length();
@@ -571,7 +607,7 @@ unsigned int state::length() {
 
 string state::str() {
 	ostringstream oss;
-	oss << "State: " << endl;
+	oss << "State: " << (bp_check ? "TRUE" : "FALSE" ) << endl;
 	oss << "Score: " << score << " copies: " << cp <<  " max_flow: " << max_flow << " ccov: " << ccov << " ncov: " << ncov << " length: " << length() << " fes: " << fpath_set.size() << endl;
 	oss << "Tail check: " << tail_check() << " edges: " << gpath_vector.size() <<  endl;
 
@@ -726,19 +762,8 @@ vector<state> state::children() {
 			children.back().bp_check=true;
 		}
 	}
-	//check the bp_check
-	/*bool has_check=false;
-	for (int i=0; i<children.size(); i++) {
-		if (!has_check && children[i].bp_check) {
-			has_check=true;
-		} else if (has_check && children[i].bp_check) {
-			cerr << "FOUND A DOUBLE AGENT!" << endl;
-			exit(1);
-		}
-	}*/
 	
 	//in any case lets check for donor edges we can add from the current state!
-	//cerr << "Warning not checking for donor edges\n";
 	last_edge = gpath_vector.back();
 	second_last_pos = last_edge.posa;
 	last_pos = last_edge.posb;
@@ -915,8 +940,6 @@ void read_links(char * filename) {
 		bps.insert(posa);
 		bps.insert(posb);
 
-	
-
 		//add the one direction
 		edge ea = edge(posa,posb);
 
@@ -924,7 +947,6 @@ void read_links(char * filename) {
 		edges[ea].type=type;
 		edges[ea].supporting=total;
 		edges[ea].bp=ea.length();
-
 
 		//add the other direction
 		edge eb = ea.reverse();
@@ -961,14 +983,18 @@ void read_cov(char * filename, bool normal) {
 		cerr << " FALLED TO MALLOC " << endl;
 		exit(1);
 	}
-	for (int i=0; i<6; i++) {
+
+	//the read shunt
+	/*for (int i=0; i<6; i++) {
 		int read = gzread(gzf,buffer+size_so_far,chunk);
 		size_so_far+=read;
 		cerr << "Warning!!!!" << endl;
 		buffer=(char*)realloc(buffer,size_so_far+chunk);
 	}
-	size_so_far=(size_so_far/soe)*soe;
-	/*while (!gzeof(gzf)) {
+	size_so_far=(size_so_far/soe)*soe;*/
+
+	//the real read loop
+	while (!gzeof(gzf)) {
 		int read = gzread(gzf,buffer+size_so_far,chunk);
 		cerr << "\rRead so far " << size_so_far;
 		if (read<0) {
@@ -981,12 +1007,8 @@ void read_cov(char * filename, bool normal) {
 			cerr << " FALLED TO REALLOC " << endl;
 			exit(1);
 		}
-	}*/
+	}
 	
-	
-	
-
-
 	//lets get a buffer to fit the file	
 	cerr << "Done reading file  " << size_so_far <<  endl;
 
@@ -1089,19 +1111,11 @@ int main(int argc, char ** argv) {
 	//read in the free edges
 	read_links(links_filename);
 
-
 	fake_edge=edge(pos(0,0),pos(0,0));
 
 	//read in the arc weights
 	read_arcs(pairs_normal_filename,true);	
 	read_arcs(pairs_cancer_filename,false);	
-
-	//need to populate the 
-	//set<pos> bps;
-	//map<edge, edge_info > edges;
-	//map<pos, set<pos> > free_edges;
-	//map<pos, int> cancer_pair_coverage;
-	//map<pos, int> normal_pair_coverage;
 	
 	//initialize the rest of the edges, so can multithread
 	for (set<pos>::iterator it=bps.begin(); it!=bps.end(); ) {
@@ -1123,11 +1137,6 @@ int main(int argc, char ** argv) {
 			edges[eb].bp=eb.length();
 		}
 	}
-
-        /*cout << "Begun search..." << endl;
-        for (set<pos>::iterator zi=free_edges[pos(12,40879710)].begin(); zi!=free_edges[pos(12,40879710)].end(); zi++) {
-                cout << zi->chr << " : " << zi->coord << endl;
-        }*/
 
 	//read in the normal
 	read_cov(cov_normal_filename,true);
@@ -1153,9 +1162,10 @@ int main(int argc, char ** argv) {
 		}
 		sit++;
 	}
+
 	cerr << "Starting enumeration..." << endl;
 
-	//#pragma omp parallel for schedule(dynamic,1)
+	//for debuggin
 	/*for (int i=0; i<start_edges.size(); i++) {
 		edge e = start_edges[i];
 		if (e.posa.coord!=201862800 || !e.is_forward()) {
@@ -1171,68 +1181,61 @@ int main(int argc, char ** argv) {
 		}
 	}
 	exit(1);*/	
+
+	//The main loop
+	#pragma omp parallel for schedule(dynamic,1)
 	for (unsigned int i=0; i<start_edges.size(); i++) {
 		edge e = start_edges[i];
-		if (e.posa.coord!=201862800 || !e.is_forward()) {
-			continue;
-		}
-		//if (false && i!=2766) {
+		//if (e.posa.coord!=201862800 || !e.is_forward()) {
 		//	continue;
 		//}
 		#pragma omp critical
 		{
 			cerr << i << " thread " << omp_get_thread_num() << endl;
-			//cerr << e.posa.chr << ":" << e.posa.coord << endl;
 		}
 		priority_queue<state> pq;
 		state s = state(e);
+		s.bp_check=true;
 		map<int, state> best_states;
 		if (!s.is_dup()) { 
 			best_states[0]=s;
 		}
 		cout << s.str() <<  s.score << endl;
 		if (s.score>ZERO && s.go_on()) {
-			pq.push(state(e));
+			pq.push(s);
 		}
 
 
-		
+		set<state_hash> visited;
+
 		while (!pq.empty()) {
 			state s = pq.top();
-			//s.go_on();
-			cout << "CHILDREN OF " << endl << s.str() << endl;
 			pq.pop();
+
+			state_hash sh = state_hash(s);
+
+			if (visited.count(sh)>0) {
+				continue;
+			} else {
+				//mark this as visited : TODO right way to handle?
+				visited.insert(sh);
+			}
+			
+			//cout << "CHILDREN OF " << endl << s.str() << endl;
+
 			if (!s.is_dup() && s.score>best_states[s.fpath_set.size()].score) {
 				best_states[s.fpath_set.size()]=s;
 			}
-			//cout << s.str();	
-			//get the children of s
-			/*if (s.gpath_vector.size()>20) {
-				int sz=s.gpath_vector.size();
-				if (s.gpath_vector[sz-1]==s.gpath_vector[sz-3] && s.gpath_vector[sz-3]==s.gpath_vector[sz-5] && s.gpath_vector[sz-5]==s.gpath_vector[sz-7]) {
-					cout << s.str() << endl;
-					exit(1);
-				}
-			}*/
+
 			vector<state> children = s.children();
-			//check the bp_check
-			//bool has_check=false;
-			/*for (int i=0; i<children.size(); i++) {
-				if (!has_check && children[i].bp_check) {
-					has_check=true;
-				} else if (has_check && children[i].bp_check) {
-					cerr << "FOUND A DOUBLE AGENT! x2" << endl;
-					exit(1);
-				}
-			}*/
+
 			for (unsigned int i=0; i<children.size(); i++) {
 				state c = children[i];
 				if (c.score>ZERO && c.go_on()) {
-					cout << "CHILD" << endl << c.str() << endl;
+					//cout << "CHILD" << endl << c.str() << endl;
 					pq.push(c);
 				} else {
-					cout << "CHILD XXX" << endl << c.str() << endl;
-
+					//cout << "CHILD XXX" << endl << c.str() << endl;
 				}		
 			}	
 		}
