@@ -16,16 +16,23 @@
 #define THREADS	20
 
 #define MIN_FLOW 4
-#define MAX_FLOW 50
+#define MAX_FLOW 30
 #define MAX_FREE 20
 
-#define ZERO 1e-10
+#define ZERO 1e-5
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
 using namespace std;
 
+
+double abs(double a) {
+	if (a<0) {
+		return -a;
+	}
+	return a;
+}
 
 class pos {
 	public:
@@ -65,32 +72,47 @@ class edge_info {
 
 class state {
 	public:
+		vector<double> scores;
 		//store the path as vector and multiset
 		vector<edge> gpath_vector;
 		multiset<edge> gpath_set;
 		//store the free edges used
 		multiset<edge> fpath_set;
-		state(edge e);
-		state();
-		state(state s, edge e);
-		vector<state> children();
 		bool bp_check;
 		double score;
 		int cp;
-		void best_score();
 		double ncov,ccov,pcov;
+		int max_flow;	
+
+		//constructors
+		state(edge e);
+		state();
+		state(state s, edge e);
+		state(vector<edge> ve);
+	
+		//constructor helpers
+		void prepend_edge(edge e);
+		void append_edge(edge e);
+		void add_edge(edge e, bool append);
+		void add_edge_to_score(edge e);
+
+		//successor function
+		vector<state> children();
+
+		//scoring
+		void best_score();
+		double score_with_flow(int flow);
+		bool go_on();
+		double tail_check();
+		bool is_dup();
+		unsigned int length();
+
+		//opeartors
 		bool operator<(const state &other) const;
 		bool operator>(const state &other) const;
-		string str();
-		state(vector<edge> ve);
-		double tail_check();
-		bool go_on();
-		unsigned int length();
-		int max_flow;	
-		double score_with_flow(int flow);
-		bool is_dup();
-		void prepend(edge e);
 
+		//display
+		string str();
 };
 
 
@@ -105,7 +127,9 @@ map<pos, double> normal_pair_coverage;
 unsigned int total_normal_pair_arcs;
 unsigned int total_cancer_pair_arcs;
 
-int bp_range=100000;
+unsigned int bp_range=100000;
+
+edge fake_edge=edge(pos(0,0),pos(0,0));
 
 //
 // The pos class
@@ -222,7 +246,8 @@ edge_info::edge_info() {
 //
 
 double state::score_with_flow(int flow) {
-	double base_unexplained=ccov-ncov;
+	//score regardless of edge sizes
+	/*double base_unexplained=ccov-ncov;
 	if (base_unexplained<0) {
 		base_unexplained=-base_unexplained;
 	}
@@ -231,7 +256,113 @@ double state::score_with_flow(int flow) {
 		p_unexplained=-p_unexplained;
 	}
 	double score=-(p_unexplained-base_unexplained);
-	return score;
+	return score;*/
+	//score based using edges
+	/*double total=0;
+	edge previous=fake_edge; edge current=fake_edge;
+	for (multiset<edge>::iterator msit=gpath_set.begin(); msit!=gpath_set.end(); msit++) {
+		previous=current;
+		current=*msit;
+		if (current==previous) {
+			continue;
+		} else {
+			edge_info ei = edges[current];
+			double ebase=abs(ei.normal_coverage-ei.cancer_coverage);
+			double eflow=abs(ei.normal_coverage*flow*gpath_set.count(current)-ei.cancer_coverage);
+			total+=ebase-eflow;
+		}
+	}*/
+	//return total;
+	//the funky chicken
+	return scores[flow];	
+}
+
+
+//assumes the edge given has not been added to the state yet
+void state::prepend_edge(edge e) {
+	add_edge(e,false);
+}
+
+void state::append_edge(edge e) {
+	add_edge(e,true);
+}
+
+
+void state::add_edge(edge e, bool append) {
+	//fix the scoring
+	add_edge_to_score(e);
+
+	//fix up ncov,ccov,pcov
+	if (gpath_set.find(e)==gpath_set.end() && gpath_set.find(e.reverse())==gpath_set.end()) {
+		//add to ncov and ccov
+		ncov+=edges[e].normal_coverage;
+		ccov+=edges[e].cancer_coverage;	
+	}	
+	pcov+=edges[e].normal_coverage;
+
+	//check if used a free edge
+	if (gpath_vector.size()>0) {
+		if (append) {
+			edge x = gpath_vector.back();
+			if (x.posb!=e.posa) {
+				//used a free edge	
+				fpath_set.insert(edge(x.posb,e.posa));
+			}
+		} else {
+			edge x = gpath_vector.front();
+			if (x.posa!=e.posb) {
+				//used a free edge	
+				fpath_set.insert(edge(x.posa,e.posb));
+			}
+		}
+	}
+
+	//add the edge to the vector
+	if (append) {
+		gpath_vector.push_back(e);
+	} else {
+		//prepending
+		gpath_vector.insert(gpath_vector.begin(),e);
+	}
+	//reflect the change in the set
+	gpath_set.insert(e);
+
+	//a simple cycle check DEBUG TODO
+	if (gpath_vector.size()>10) {
+		int sz = gpath_vector.size();
+		if (gpath_vector[sz-1]==gpath_vector[sz-3] && gpath_vector[sz-3]==gpath_vector[sz-5] && gpath_vector[sz-5]==gpath_vector[sz-7]) {
+			cerr << "SOMETHING WEIRD\n"; exit(1);
+		}
+	}
+
+
+	//find the best score
+	best_score();
+
+	//make sure that this is not accidently set
+	bp_check=false;
+}
+
+void state::add_edge_to_score(edge e) {
+	edge_info ei = edges[e];
+	double ebase=abs(ei.normal_coverage-ei.cancer_coverage);
+
+	//find out how many times it has been used
+	int count=gpath_set.count(e)+gpath_set.count(e.reverse());
+	//check if the edge was already in our path
+	if (count>0) {
+		//remove its value from the scorings
+		for (int i=MIN_FLOW; i<MAX_FLOW; i++) {
+			double eflow=abs(ei.normal_coverage*i*count-ei.cancer_coverage);
+			scores[i]-=ebase-eflow;
+		}
+	}
+
+	//ok now lets add the thing back with a count+1
+	for (int i=MIN_FLOW; i<MAX_FLOW; i++) {
+		double eflow=abs(ei.normal_coverage*i*(count+1)-ei.cancer_coverage);
+		scores[i]-=ebase-eflow;
+	}
 }
 
 void state::best_score() {
@@ -243,12 +374,12 @@ void state::best_score() {
 				exit(1);
 			}
 			edge_info ei = edges[fe];
-			double cancer_pairs_posa = cancer_pair_coverage[fe.posa];
+			//double cancer_pairs_posa = cancer_pair_coverage[fe.posa];
 			double normal_pairs_posa = normal_pair_coverage[fe.posa];
-			double cancer_pairs_posb = cancer_pair_coverage[fe.posb];
+			//double cancer_pairs_posb = cancer_pair_coverage[fe.posb];
 			double normal_pairs_posb = normal_pair_coverage[fe.posb];
-			int ra = 2+ceil(cancer_pairs_posa/(0.001*cancer_pairs_posa+ normal_pairs_posa));
-			int rb = 2+ceil(cancer_pairs_posb/(0.001*cancer_pairs_posb+ normal_pairs_posb));
+			//int ra = 2+ceil(cancer_pairs_posa/(0.001*cancer_pairs_posa+ normal_pairs_posa));
+			//int rb = 2+ceil(cancer_pairs_posb/(0.001*cancer_pairs_posb+ normal_pairs_posb));
 			//max_flow=MIN(MAX(ra,rb),max_flow);
 			double supporting = ((double)ei.supporting)/total_normal_pair_arcs;
 			double supporting_posa = ceil(10*(supporting/(0.001*supporting + normal_pairs_posa)));
@@ -271,52 +402,57 @@ void state::best_score() {
 
 
 state::state() {
+	//make sure some variables are set up
+	scores.resize(MAX_FLOW,0.0);
 	max_flow=MAX_FLOW;
+	ncov=0; ccov=0; pcov=0; score=0; cp=0; 
+	bp_check=false;
 }
 
 state::state(edge e) {
+	scores.resize(MAX_FLOW,0.0);
 	max_flow=MAX_FLOW;
 	ncov=0; ccov=0; pcov=0; score=0; cp=0; 	
-	gpath_vector.push_back(e);
-	gpath_set.insert(e);
-	//set up the ncov,ccov,pcov
-	ncov=edges[e].normal_coverage;
-	ccov=edges[e].cancer_coverage;
-	pcov=edges[e].normal_coverage;
+	
+	//add in the edge
+	append_edge(e);
 	//find the best score
 	best_score();
-	bp_check=true;
+	//lets make sure we set this to explorable
+	bp_check=false;
 }
 
 
 state::state(vector<edge> ve) {
+	scores.resize(MAX_FLOW,0.0);
 	max_flow=MAX_FLOW;
 	ncov=0; ccov=0; pcov=0; score=0; cp=0; 	
-	for (int i=0; i<ve.size(); i++) {
-		edge e = ve[i];
-		//fix up ncov,ccov,pcov
-		if (gpath_set.find(e)==gpath_set.end() || gpath_set.find(e.reverse())==gpath_set.end()) {
-			//add to ncov and ccov
-			ncov+=edges[e].normal_coverage;
-			ccov+=edges[e].cancer_coverage;	
-		}	
-		pcov+=edges[e].normal_coverage;
 
-		if (gpath_vector.size()>0) {
-			edge x = gpath_vector.back();
-			if (x.posb!=e.posa) {
-				//used a free edge	
-				fpath_set.insert(edge(x.posb,e.posa));
-			}
-		}
-		//push the vector
-		gpath_vector.push_back(e);
-		gpath_set.insert(e);
+	//add in all the edges
+	for (unsigned int i=0; i<ve.size(); i++) {
+		edge e = ve[i];
+		append_edge(e);
 	}
+
 	//find the best score
 	best_score();
 	bp_check=false;
 }
+
+state::state(state s, edge e) {
+	//lets get a copy of the parent
+	*this=s; //calls copy constructor
+	
+	//add the edge
+	append_edge(e);
+
+	//find the best score
+	best_score();
+
+	//make sure bp_check is not set
+	bp_check=false;
+}
+
 
 bool state::is_dup() {
 	if (gpath_vector.size()==0) {
@@ -324,7 +460,7 @@ bool state::is_dup() {
 	}
 
 
-	int edges = gpath_vector.size();
+	unsigned int edges = gpath_vector.size();
 	state our_state = *this; //copy our state, then we muck with it	
 
 	unsigned int bp_so_far=0;
@@ -350,7 +486,7 @@ bool state::is_dup() {
 		}
 		edge e=edge(*sit,old_point);
 		bp_so_far+=e.length();
-		our_state.prepend(e);
+		our_state.prepend_edge(e);
 	
 		if (our_state.score>score) {
 			//just checking
@@ -372,83 +508,6 @@ bool state::is_dup() {
 	return false;
 }
 
-void state::prepend(edge e) {
-	//fix up ncov,ccov,pcov
-	if (gpath_set.find(e)==gpath_set.end() && gpath_set.find(e.reverse())==gpath_set.end()) {
-		//add to ncov and ccov
-		ncov+=edges[e].normal_coverage;
-		ccov+=edges[e].cancer_coverage;	
-	}	
-	pcov+=edges[e].normal_coverage;
-
-
-	if (gpath_vector.size()>0) {
-		edge x = gpath_vector.front();
-		if (x.posa!=e.posb) {
-			//used a free edge	
-			fpath_set.insert(edge(x.posa,e.posb));
-		}
-	}
-
-	gpath_vector.insert(gpath_vector.begin(),e);
-	if (gpath_vector.size()>10) {
-		int sz = gpath_vector.size();
-		if (gpath_vector[sz-1]==gpath_vector[sz-3] && gpath_vector[sz-3]==gpath_vector[sz-5] && gpath_vector[sz-5]==gpath_vector[sz-7]) {
-			cerr << "SOMETHING WEIRD\n"; exit(1);
-		}
-	}
-	gpath_set.insert(e);
-
-
-
-	//find the best score
-	best_score();
-
-	bp_check=false;
-}
-
-state::state(state s, edge e) {
-	max_flow=s.max_flow;
-	ncov=0; ccov=0; pcov=0; score=0; cp=0; 	
-
-	*this=s; //calls copy constructor?
-
-	
-	//fix up ncov,ccov,pcov
-	if (gpath_set.find(e)==gpath_set.end() && gpath_set.find(e.reverse())==gpath_set.end()) {
-		//add to ncov and ccov
-		ncov+=edges[e].normal_coverage;
-		ccov+=edges[e].cancer_coverage;	
-	}	
-	pcov+=edges[e].normal_coverage;
-
-
-	if (gpath_vector.size()>0) {
-		edge x = gpath_vector.back();
-		if (x.posb!=e.posa) {
-			//used a free edge	
-			fpath_set.insert(edge(x.posb,e.posa));
-		}
-	}
-
-	gpath_vector.push_back(e);
-	if (gpath_vector.size()>10) {
-		int sz = gpath_vector.size();
-		if (gpath_vector[sz-1]==gpath_vector[sz-3] && gpath_vector[sz-3]==gpath_vector[sz-5] && gpath_vector[sz-5]==gpath_vector[sz-7]) {
-			cerr << "SOMETHING WEIRD\n"; exit(1);
-		}
-	}
-	gpath_set.insert(e);
-
-
-
-	//find the best score
-	best_score();
-
-	bp_check=false;
-
-}
-
 
 bool state::go_on() {
 	return tail_check()>ZERO;
@@ -458,16 +517,16 @@ double state::tail_check() {
 	//lets chec the last bp_range and make sure its positive
 	vector<edge> ve;
 	vector<edge> ve_c;
-	int bp=0;
-	int i=0;
+	unsigned int bp=0;
+	unsigned int i=0;
 	for (; i<gpath_vector.size() && bp<bp_range; i++) {
 		edge e = gpath_vector[gpath_vector.size()-1-i];
 		bp+=e.length();
 	}
 	size_t nsize = gpath_vector.size()-i;
-	double cc=0;
-	double nc=0;
-	for (int n=0; n<nsize; n++) {
+	//double cc=0;
+	//double nc=0;
+	for (unsigned int n=0; n<nsize; n++) {
 		ve_c.push_back(gpath_vector[n]);
 	}
 	/*for (; i>0; i--) {
@@ -487,7 +546,7 @@ double state::tail_check() {
 	//}
 	//cerr << "TAIL CHECK " << cc << " | " << nc << "((("  << i << " K "<< z.posa.chr << ":" << z.posa.coord << " "<< gpath_vector.size() << " vs " << nsize << " x " << this->score <<  " " << s_c.score << endl;
 
-	double old_score=score_with_flow(s_c.cp);	
+	//double old_score=score_with_flow(s_c.cp);	
 
 	
 	//return bp_range*(old_score-s_c.score)/length();
@@ -503,7 +562,7 @@ bool state::operator<(const state &other) const {
 
 unsigned int state::length() {
 	unsigned int l=0;
-	for (int i=0; i<gpath_vector.size(); i++) {
+	for (unsigned int i=0; i<gpath_vector.size(); i++) {
 		l+=gpath_vector[i].length();
 	}
 	return l;
@@ -529,7 +588,7 @@ string state::str() {
 		double nc = edges[start].normal_coverage;
 		double cc = edges[start].cancer_coverage;
 		int len = start.length();
-		for (int i=1; i<gpath_vector.size(); i++) {
+		for (unsigned int i=1; i<gpath_vector.size(); i++) {
 			edge e = gpath_vector[i];
 			//if (e.posa.coord==94516290 || e.posb.coord==94516290) {
 			//	exitb=true;
@@ -618,7 +677,7 @@ vector<state> state::children() {
 			cerr << "Something went wrong" << endl;
 			exit(1);
 		}	
-		int bp_moved=0;
+		unsigned int bp_moved=0;
 
 		pos current_pos=last_pos;
 		if (forward) {
@@ -699,6 +758,10 @@ vector<state> state::children() {
 			exit(1);
 		}
 		set<pos>::iterator ssit;
+
+		edge to_add = fake_edge;
+
+		//check to see how we can use the edge
 		if (forward && type%2==0) {
 			if (type==0) {
 				//type 0 - leave on positive
@@ -706,8 +769,7 @@ vector<state> state::children() {
 				ssit++;
 				if (ssit!=bps.end() && sit->chr==ssit->chr) {
 					//use this edge
-					edge e = edge(*sit,*ssit);
-					children.push_back(state(*this,e));
+					to_add = edge(*sit,*ssit);
 				}
 			} else {
 				//type 2 - leave on negative
@@ -716,8 +778,7 @@ vector<state> state::children() {
 					ssit--;
 					//use this edge
 					if (sit->chr==ssit->chr) {
-						edge e = edge(*sit,*ssit);
-						children.push_back(state(*this,e));
+						to_add = edge(*sit,*ssit);
 					}
 				}
 			}
@@ -729,8 +790,7 @@ vector<state> state::children() {
 					ssit--;
 					//use this edge
 					if (sit->chr==ssit->chr) {
-						edge e = edge(*sit,*ssit);
-						children.push_back(state(*this,e));
+						to_add = edge(*sit,*ssit);
 					}
 				}
 			} else {
@@ -739,11 +799,17 @@ vector<state> state::children() {
 				ssit++;
 				if (ssit!=bps.end() && sit->chr==ssit->chr) {
 					//use this edge
-					edge e = edge(*sit,*ssit);
-					children.push_back(state(*this,e));
+					to_add = edge(*sit,*ssit);
 				}
 			} 
 
+		}
+
+		//check if we found a edge to use, if so add it!	
+		if (!(to_add==fake_edge)) {
+			state child = state(*this,to_add);
+			child.bp_check=true;
+			children.push_back(child);
 		}
 	}
 
@@ -895,7 +961,7 @@ void read_cov(char * filename, bool normal) {
 		cerr << " FALLED TO MALLOC " << endl;
 		exit(1);
 	}
-	for (int i=0; i<3; i++) {
+	for (int i=0; i<6; i++) {
 		int read = gzread(gzf,buffer+size_so_far,chunk);
 		size_so_far+=read;
 		cerr << "Warning!!!!" << endl;
@@ -935,8 +1001,8 @@ void read_cov(char * filename, bool normal) {
 	
 	#pragma omp parallel 
 	{
-	int threads = omp_get_num_threads();
-	int thread_id = omp_get_thread_num();
+	unsigned int threads = omp_get_num_threads();
+	unsigned int thread_id = omp_get_thread_num();
 	//cerr << "thread " <<  thread_id << endl;
 	unsigned long total_coverage_t=0;
 
@@ -1024,6 +1090,8 @@ int main(int argc, char ** argv) {
 	read_links(links_filename);
 
 
+	fake_edge=edge(pos(0,0),pos(0,0));
+
 	//read in the arc weights
 	read_arcs(pairs_normal_filename,true);	
 	read_arcs(pairs_cancer_filename,false);	
@@ -1088,7 +1156,7 @@ int main(int argc, char ** argv) {
 	cerr << "Starting enumeration..." << endl;
 
 	//#pragma omp parallel for schedule(dynamic,1)
-	for (int i=0; i<start_edges.size(); i++) {
+	/*for (int i=0; i<start_edges.size(); i++) {
 		edge e = start_edges[i];
 		if (e.posa.coord!=201862800 || !e.is_forward()) {
 			continue;
@@ -1102,9 +1170,12 @@ int main(int argc, char ** argv) {
 			bps_it++;
 		}
 	}
-	exit(1);	
-	for (int i=0; i<start_edges.size(); i++) {
+	exit(1);*/	
+	for (unsigned int i=0; i<start_edges.size(); i++) {
 		edge e = start_edges[i];
+		if (e.posa.coord!=201862800 || !e.is_forward()) {
+			continue;
+		}
 		//if (false && i!=2766) {
 		//	continue;
 		//}
@@ -1119,7 +1190,7 @@ int main(int argc, char ** argv) {
 		if (!s.is_dup()) { 
 			best_states[0]=s;
 		}
-		//cout << s.str() <<  s.score << endl;
+		cout << s.str() <<  s.score << endl;
 		if (s.score>ZERO && s.go_on()) {
 			pq.push(state(e));
 		}
@@ -1129,7 +1200,7 @@ int main(int argc, char ** argv) {
 		while (!pq.empty()) {
 			state s = pq.top();
 			//s.go_on();
-			//cout << "CHILDREN OF " << endl << s.str() << endl;
+			cout << "CHILDREN OF " << endl << s.str() << endl;
 			pq.pop();
 			if (!s.is_dup() && s.score>best_states[s.fpath_set.size()].score) {
 				best_states[s.fpath_set.size()]=s;
@@ -1145,7 +1216,7 @@ int main(int argc, char ** argv) {
 			}*/
 			vector<state> children = s.children();
 			//check the bp_check
-			bool has_check=false;
+			//bool has_check=false;
 			/*for (int i=0; i<children.size(); i++) {
 				if (!has_check && children[i].bp_check) {
 					has_check=true;
@@ -1154,12 +1225,15 @@ int main(int argc, char ** argv) {
 					exit(1);
 				}
 			}*/
-			for (int i=0; i<children.size(); i++) {
+			for (unsigned int i=0; i<children.size(); i++) {
 				state c = children[i];
 				if (c.score>ZERO && c.go_on()) {
-					//cout << "CHILD" << endl << c.str() << endl;
+					cout << "CHILD" << endl << c.str() << endl;
 					pq.push(c);
-				}				
+				} else {
+					cout << "CHILD XXX" << endl << c.str() << endl;
+
+				}		
 			}	
 		}
 	
