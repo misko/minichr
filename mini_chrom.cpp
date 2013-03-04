@@ -19,9 +19,9 @@
 #define MAX_FLOW 30
 #define MAX_FREE 20
 
-#define ZERO 1e-5
+#define ZERO 1e-6
 
-#define MAX_EDGE_SIZE 2400
+#define MAX_EDGE_SIZE 1200
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
