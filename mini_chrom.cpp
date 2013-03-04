@@ -21,6 +21,7 @@
 
 #define ZERO 1e-5
 
+#define MAX_EDGE_SIZE 2400
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
@@ -344,12 +345,20 @@ void state::add_edge(edge e, bool append) {
 			if (x.posb!=e.posa) {
 				//used a free edge	
 				fpath_set.insert(edge(x.posb,e.posa));
+				if (free_edges[x.posb].find(e.posa)==free_edges[x.posb].end()) {
+					cerr << "FAILED TO FIND EARLZ" << endl;
+					exit(1);
+				}
 			}
 		} else {
 			edge x = gpath_vector.front();
 			if (x.posa!=e.posb) {
 				//used a free edge	
-				fpath_set.insert(edge(x.posa,e.posb));
+				fpath_set.insert(edge(e.posb,x.posa));
+				if (free_edges[e.posb].find(x.posa)==free_edges[e.posb].end()) {
+					cerr << "FAILED TO FIND EARLY " << e.posa.chr << ":" << e.posa.coord << " " << e.posb.chr << ":" << e.posb.coord << " " << x.posa.chr << ":" << x.posa.coord << " " << x.posb.chr << ":" << x.posb.coord << " " << endl;
+					exit(1);
+				}
 			}
 		}
 	}
@@ -411,7 +420,19 @@ void state::best_score() {
 				exit(1);
 			}
 			edge_info ei = edges[fe];
+			/*if (free_edges[fe.posa].size()==0 || free_edges[fe.posb].size()==0) {
+				cerr << "THIS IS NOT A FREE EDGE " << fe.posa.chr << ":" << fe.posa.coord << " " << fe.posb.chr << ":" << fe.posb.coord << endl;
+				exit(1);
+			}
 			//double cancer_pairs_posa = cancer_pair_coverage[fe.posa];
+			if (normal_pair_coverage.find(fe.posa)==normal_pair_coverage.end()) {
+				cerr << "ANOTHER BIG ERRO! xC" << fe.posa.chr << " :" << fe.posa.coord << endl;
+				exit(1);
+			}
+			if (normal_pair_coverage.find(fe.posb)==normal_pair_coverage.end()) {
+				cerr << "ANOTHER BIG ERRO! xD" << fe.posb.chr << " :" << fe.posb.coord << endl;
+				exit(1);
+			}*/
 			double normal_pairs_posa = normal_pair_coverage[fe.posa];
 			//double cancer_pairs_posb = cancer_pair_coverage[fe.posb];
 			double normal_pairs_posb = normal_pair_coverage[fe.posb];
@@ -503,11 +524,7 @@ bool state::is_dup() {
 	unsigned int bp_so_far=0;
 	edge first_e = gpath_vector[0];
 	set<pos>::iterator sit;
-	if (first_e.is_forward() ) {
-		sit=bps.find(first_e.posa);
-	} else {
-		sit=bps.find(first_e.posb);
-	}
+	sit=bps.find(first_e.posa);
 	while (bp_so_far<bp_range && sit->chr==first_e.posa.chr) {
 		pos old_point = *sit;
 		if (first_e.is_forward()) {
@@ -650,6 +667,14 @@ string state::str() {
 					exit(1);
 				}
 				edge_info ei = edges[edge(last.posb,e.posa)];
+				if (normal_pair_coverage.find(e.posa)==normal_pair_coverage.end()) {
+					cerr << "ANOTHER BIG ERRO! xCz" << e.posa.chr << " :" << e.posa.coord << endl;
+					exit(1);
+				}
+				if (normal_pair_coverage.find(last.posb)==normal_pair_coverage.end()) {
+					cerr << "ANOTHER BIG ERRO! xDz" << last.posb.chr << " :" << last.posb.coord << endl;
+					exit(1);
+				}
 				double cancer_pairs_posa = cancer_pair_coverage[last.posb];
 				double normal_pairs_posa = normal_pair_coverage[last.posb];
 				double cancer_pairs_posb = cancer_pair_coverage[e.posa];
@@ -985,7 +1010,7 @@ void read_cov(char * filename, bool normal) {
 	}
 
 	//the read shunt
-	/*for (int i=0; i<6; i++) {
+	/*for (int i=0; i<1; i++) {
 		int read = gzread(gzf,buffer+size_so_far,chunk);
 		size_so_far+=read;
 		cerr << "Warning!!!!" << endl;
@@ -1116,6 +1141,29 @@ int main(int argc, char ** argv) {
 	//read in the arc weights
 	read_arcs(pairs_normal_filename,true);	
 	read_arcs(pairs_cancer_filename,false);	
+
+	//lets slice up the rest
+	set<pos> to_add;
+	for (set<pos>::iterator it=bps.begin(); it!=bps.end(); ) {
+		pos current=*it;
+		//cout << current.chr << ":" << current.coord << endl;
+		it++;
+		pos next=*it;
+		if (it==bps.end()) {
+			break;
+		}
+		if (current.chr==next.chr && next.coord-current.coord>MAX_EDGE_SIZE) {
+			pos i = pos(current.chr,current.coord+MAX_EDGE_SIZE);
+			while (next.coord>MAX_EDGE_SIZE+i.coord) {
+				to_add.insert(i);
+				i = pos(current.chr,i.coord+MAX_EDGE_SIZE);
+			}
+		}
+	}
+	for (set<pos>::iterator it=to_add.begin(); it!=to_add.end(); it++) {
+		bps.insert(*it);
+	}
+
 	
 	//initialize the rest of the edges, so can multithread
 	for (set<pos>::iterator it=bps.begin(); it!=bps.end(); ) {
@@ -1156,8 +1204,10 @@ int main(int argc, char ** argv) {
 		if (current.chr==previous.chr) {
 			edge ea = edge(previous,current);
 			edge eb = ea.reverse();
-			start_edges.push_back(ea);
-			start_edges.push_back(eb);
+			if (free_edges[ea.posa].size()>0 || free_edges[ea.posb].size()>0) {
+				start_edges.push_back(ea);
+				start_edges.push_back(eb);
+			}
 			//cerr << "Warning only forward edges " << endl;
 		}
 		sit++;
@@ -1200,7 +1250,7 @@ int main(int argc, char ** argv) {
 		if (!s.is_dup()) { 
 			best_states[0]=s;
 		}
-		cout << s.str() <<  s.score << endl;
+		//cout << s.str() <<  s.score << endl;
 		if (s.score>ZERO && s.go_on()) {
 			pq.push(s);
 		}
