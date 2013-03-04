@@ -19,9 +19,9 @@
 #define MAX_FLOW 30
 #define MAX_FREE 20
 
-#define ZERO 1e-6
+#define ZERO 1e-5
 
-#define MAX_EDGE_SIZE 1200
+#define MAX_EDGE_SIZE 2400
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
@@ -163,6 +163,8 @@ map<pos, double> cancer_pair_coverage;
 map<pos, double> normal_pair_coverage;
 unsigned int total_normal_pair_arcs;
 unsigned int total_cancer_pair_arcs;
+map<edge, state> edge_bests;
+
 
 unsigned int bp_range=100000;
 
@@ -1233,73 +1235,145 @@ int main(int argc, char ** argv) {
 	exit(1);*/	
 
 	//The main loop
-	#pragma omp parallel for schedule(dynamic,1)
-	for (unsigned int i=0; i<start_edges.size(); i++) {
-		edge e = start_edges[i];
-		//if (e.posa.coord!=201862800 || !e.is_forward()) {
-		//	continue;
-		//}
-		#pragma omp critical
-		{
-			cerr << i << " thread " << omp_get_thread_num() << endl;
-		}
-		priority_queue<state> pq;
-		state s = state(e);
-		s.bp_check=true;
-		map<int, state> best_states;
-		if (!s.is_dup()) { 
-			best_states[0]=s;
-		}
-		//cout << s.str() <<  s.score << endl;
-		if (s.score>ZERO && s.go_on()) {
-			pq.push(s);
-		}
+	state best_state;
+	set<edge> skip_edges;	
 
 
-		set<state_hash> visited;
+	int iteration = 0;
+	do {
+		iteration++;
 
-		while (!pq.empty()) {
-			state s = pq.top();
-			pq.pop();
-
-			state_hash sh = state_hash(s);
-
-			if (visited.count(sh)>0) {
-				continue;
-			} else {
-				//mark this as visited : TODO right way to handle?
-				visited.insert(sh);
-			}
-			
-			//cout << "CHILDREN OF " << endl << s.str() << endl;
-
-			if (!s.is_dup() && s.score>best_states[s.fpath_set.size()].score) {
-				best_states[s.fpath_set.size()]=s;
-			}
-
-			vector<state> children = s.children();
-
-			for (unsigned int i=0; i<children.size(); i++) {
-				state c = children[i];
-				if (c.score>ZERO && c.go_on()) {
-					//cout << "CHILD" << endl << c.str() << endl;
-					pq.push(c);
-				} else {
-					//cout << "CHILD XXX" << endl << c.str() << endl;
+		cerr << "One iteration " << iteration << endl;
+		best_state=state();
+		#pragma omp parallel for schedule(dynamic,1)
+		for (unsigned int i=0; i<start_edges.size(); i++) {
+			//if (e.posa.coord!=201862800 || !e.is_forward()) {
+			//	continue;
+			//}
+			edge e = start_edges[i];
+			bool skip=false;
+			#pragma omp critical
+			{
+				if (skip_edges.find(e)!=skip_edges.end()) {
+					skip=true;
 				}		
-			}	
-		}
-	
+				cerr << i << " thread " << omp_get_thread_num() << endl;
+			}
+			if (skip) {
+				continue;
+			}
 
-		#pragma omp critical
-		{
-			for (map<int, state>::iterator mit=best_states.begin(); mit!=best_states.end(); mit++) {
-				if ((mit->second).score>ZERO) {
-						cout << (mit->second).str();
+			priority_queue<state> pq;
+			state s = state(e);
+			s.bp_check=true;
+			map<int, state> best_states;
+			if (!s.is_dup()) { 
+				best_states[0]=s;
+			}
+			//cout << s.str() <<  s.score << endl;
+			if (s.score>ZERO && s.go_on()) {
+				pq.push(s);
+			}
+
+
+			set<state_hash> visited;
+
+			while (!pq.empty()) {
+				state s = pq.top();
+				pq.pop();
+
+				state_hash sh = state_hash(s);
+
+				if (visited.count(sh)>0) {
+					continue;
+				} else {
+					//mark this as visited : TODO right way to handle?
+					visited.insert(sh);
+				}
+				
+				//cout << "CHILDREN OF " << endl << s.str() << endl;
+
+				if (!s.is_dup() && s.score>best_states[s.fpath_set.size()].score) {
+					best_states[s.fpath_set.size()]=s;
+				}
+
+				vector<state> children = s.children();
+
+				for (unsigned int i=0; i<children.size(); i++) {
+					state c = children[i];
+					if (c.score>ZERO && c.go_on()) {
+						//cout << "CHILD" << endl << c.str() << endl;
+						pq.push(c);
+					} else {
+						//cout << "CHILD XXX" << endl << c.str() << endl;
+					}		
+				}	
+			}
+		
+
+			#pragma omp critical
+			{
+				for (map<int, state>::iterator mit=best_states.begin(); mit!=best_states.end(); mit++) {
+					if ((mit->second).score>ZERO) {
+						//cout << (mit->second).str();
+						if ((mit->second).score>best_state.score) {
+							best_state=mit->second;			
+						}
+						if ((mit->second).score>edge_bests[e].score) {
+							edge_bests[e]=(mit->second);
+						}
+					}
 				}
 			}
 		}
-	}
+
+		//output the best path
+		cout << best_state.str() << endl;
+	
+
+		//lets change out the path
+		for (unsigned int i=0; i<best_state.gpath_vector.size(); i++) {
+			edge e = best_state.gpath_vector[i];
+			edge_info ei = edges[e];
+			ei.cancer_coverage -= ei.normal_coverage*best_state.cp;			
+		
+			edge er = e.reverse();
+			edge_info eri = edges[e];
+			eri.cancer_coverage -= eri.normal_coverage*best_state.cp;			
+		}
+
+			
+		//lest find out which ones we need to rerun	
+		skip_edges.empty();
+		#pragma omp parallel for schedule(dynamic,1)
+		for (unsigned int i=0; i<start_edges.size(); i++) {
+			edge e = start_edges[i];
+			state edge_best;
+			#pragma omp critical
+			{
+				edge_best = edge_bests[e];
+			}
+			//check if any edges overlap
+			bool overlap=false;
+			for (multiset<edge>::iterator sit=edge_best.gpath_set.begin(); sit!=edge_best.gpath_set.end(); sit++) {
+				edge e = *sit;
+				edge er = e.reverse();
+				for (multiset<edge>::iterator ssit=edge_best.gpath_set.begin(); ssit!=edge_best.gpath_set.end(); ssit++) {
+					if (*ssit==e || *ssit==er) {
+						overlap=true;
+					}
+				}
+			}
+			if (overlap) {
+
+			} else {
+				#pragma omp critical
+				{
+					skip_edges.insert(e);	
+				}
+			}	
+		}
+	} while (best_state.score>ZERO);
 	
 	return 0;
 }
