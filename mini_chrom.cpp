@@ -13,7 +13,7 @@
 #include <queue>
 #include <math.h>
 
-#define THREADS	20
+#define THREADS	32
 
 #define MIN_FLOW 4
 #define MAX_FLOW 30
@@ -278,6 +278,11 @@ bool edge::is_forward() {
 }
 
 edge_info::edge_info() {
+	bp=0;
+	normal_coverage=0.0;
+	cancer_coverage=0.0;
+	type=5;
+	supporting=0;
 }
 
 
@@ -1012,7 +1017,7 @@ void read_cov(char * filename, bool normal) {
 	}
 
 	//the read shunt
-	/*for (int i=0; i<1; i++) {
+	/*for (int i=0; i<6; i++) {
 		int read = gzread(gzf,buffer+size_so_far,chunk);
 		size_so_far+=read;
 		cerr << "Warning!!!!" << endl;
@@ -1243,7 +1248,7 @@ int main(int argc, char ** argv) {
 	do {
 		iteration++;
 
-		cerr << "One iteration " << iteration << endl;
+		cerr << endl << iteration << "-th iteration , skipping : " << skip_edges.size()  << endl;
 		best_state=state();
 		#pragma omp parallel for schedule(dynamic,1)
 		for (unsigned int i=0; i<start_edges.size(); i++) {
@@ -1257,7 +1262,7 @@ int main(int argc, char ** argv) {
 				if (skip_edges.find(e)!=skip_edges.end()) {
 					skip=true;
 				}		
-				cerr << i << " thread " << omp_get_thread_num() << endl;
+				cerr << "\r" << i << " thread " << omp_get_thread_num() << "   ";
 			}
 			if (skip) {
 				continue;
@@ -1335,11 +1340,20 @@ int main(int argc, char ** argv) {
 		for (unsigned int i=0; i<best_state.gpath_vector.size(); i++) {
 			edge e = best_state.gpath_vector[i];
 			edge_info ei = edges[e];
-			ei.cancer_coverage -= ei.normal_coverage*best_state.cp;			
+			ei.cancer_coverage -= ei.normal_coverage*best_state.cp;	
+			edges[e]=ei;
 		
 			edge er = e.reverse();
 			edge_info eri = edges[e];
 			eri.cancer_coverage -= eri.normal_coverage*best_state.cp;			
+			edges[er]=eri;
+		}
+
+		//and remove the free edges
+		for (multiset<edge>::iterator msi=best_state.fpath_set.begin(); msi!=best_state.fpath_set.end(); msi++) {
+			edge e = *msi;
+			free_edges[e.posa].erase(e.posb);
+			free_edges[e.posb].erase(e.posa);
 		}
 
 			
@@ -1356,10 +1370,10 @@ int main(int argc, char ** argv) {
 			//check if any edges overlap
 			bool overlap=false;
 			for (multiset<edge>::iterator sit=edge_best.gpath_set.begin(); sit!=edge_best.gpath_set.end(); sit++) {
-				edge e = *sit;
-				edge er = e.reverse();
+				edge ea = *sit;
+				edge eb = e.reverse();
 				for (multiset<edge>::iterator ssit=edge_best.gpath_set.begin(); ssit!=edge_best.gpath_set.end(); ssit++) {
-					if (*ssit==e || *ssit==er) {
+					if (*ssit==ea || *ssit==eb) {
 						overlap=true;
 					}
 				}
