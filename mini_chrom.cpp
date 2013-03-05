@@ -1369,7 +1369,7 @@ int main(int argc, char ** argv) {
 			}
 			//check if any edges overlap
 			bool overlap=false;
-			for (multiset<edge>::iterator sit=edge_best.gpath_set.begin(); sit!=edge_best.gpath_set.end(); sit++) {
+			for (multiset<edge>::iterator sit=best_state.gpath_set.begin(); sit!=best_state.gpath_set.end(); sit++) {
 				edge ea = *sit;
 				edge eb = e.reverse();
 				for (multiset<edge>::iterator ssit=edge_best.gpath_set.begin(); ssit!=edge_best.gpath_set.end(); ssit++) {
