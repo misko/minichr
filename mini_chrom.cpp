@@ -21,6 +21,9 @@
 
 #define ZERO 1e-5
 
+#define MULTI_FREE_EDGE	false
+#define COVERAGE_BOUND	true
+
 #define MAX_EDGE_SIZE 2400
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
@@ -58,6 +61,7 @@ class edge {
 		bool operator>(const edge &other) const;
 		bool operator==(const edge &other) const;
 		bool is_forward();
+		unsigned int bound_cp();
 };
 
 
@@ -277,6 +281,92 @@ bool edge::is_forward() {
 	return posb>posa;
 }
 
+unsigned int edge::bound_cp() {
+	if (!COVERAGE_BOUND) {
+		return MAX_FLOW;
+	}
+	//get forward coverage
+	double next_ncov=0.0;
+	double next_ccov=0.0;
+	unsigned int next_bp;
+	set<pos>::iterator sit = bps.find(posb);
+	if (is_forward()) {
+		pos previous = posb;
+		while (sit!=bps.end() && next_bp<MAX_EDGE_SIZE) {
+			sit++;
+			pos p = *sit;
+			edge e = edge(previous,p);
+			next_bp+=e.length();
+			edge_info ei = edges[e];
+			next_ccov += ei.cancer_coverage;
+			next_ncov += ei.normal_coverage;
+			previous=*sit;
+			if (free_edges[p].size()>0) {
+				break;
+			}
+		}
+	} else {
+		pos previous = posb;
+		while (sit!=bps.begin() && next_bp<MAX_EDGE_SIZE) {
+			sit--;
+			pos p = *sit;
+			edge e = edge(previous,p);
+			next_bp+=e.length();
+			edge_info ei = edges[e];
+			next_ccov += ei.cancer_coverage;
+			next_ncov += ei.normal_coverage;
+			previous=*sit;
+			if (free_edges[p].size()>0) {
+				break;
+			}
+		}
+	}
+	//get backward coverage
+	double prev_ncov=0.0;
+	double prev_ccov=0.0;
+	unsigned int prev_bp;
+	sit = bps.find(posa);
+	if (!is_forward()) {
+		pos previous = posa;
+		while (sit!=bps.end() && prev_bp<MAX_EDGE_SIZE) {
+			sit++;
+			pos p = *sit;
+			edge e = edge(previous,p);
+			prev_bp+=e.length();
+			edge_info ei = edges[e];
+			prev_ccov += ei.cancer_coverage;
+			prev_ncov += ei.normal_coverage;
+			previous=*sit;
+			if (free_edges[p].size()>0) {
+				break;
+			}
+		}
+	} else {
+		pos previous = posa;
+		while (sit!=bps.begin() && prev_bp<MAX_EDGE_SIZE) {
+			sit--;
+			pos p = *sit;
+			edge e = edge(previous,p);
+			prev_bp+=e.length();
+			edge_info ei = edges[e];
+			prev_ccov += ei.cancer_coverage;
+			prev_ncov += ei.normal_coverage;
+			previous=*sit;
+			if (free_edges[p].size()>0) {
+				break;
+			}
+		}
+	}
+
+
+	double next_ratio=next_ccov/(0.001*next_ccov+next_ncov);
+	double prev_ratio=prev_ccov/(0.001*prev_ccov+prev_ncov);
+
+	double bound = MAX(0,prev_ratio-next_ratio);
+	return ceil(bound)+3;
+
+}
+
 edge_info::edge_info() {
 	bp=0;
 	normal_coverage=0.0;
@@ -284,6 +374,7 @@ edge_info::edge_info() {
 	type=5;
 	supporting=0;
 }
+
 
 
 //
@@ -450,6 +541,7 @@ void state::best_score() {
 			double supporting_posa = ceil(10*(supporting/(0.001*supporting + normal_pairs_posa)));
 			double supporting_posb = ceil(10*(supporting/(0.001*supporting + normal_pairs_posb)));
 			max_flow=MIN(MAX(supporting_posa,supporting_posb),max_flow);
+
 	} 
 	//find the best score and cp
 	double best_score=0;
@@ -695,7 +787,45 @@ string state::str() {
 				oss << " posa(cancer,normal) " << cancer_pairs_posa << "," << normal_pairs_posa << " RX: " << supporting_posa << " R:" << cancer_pairs_posa/(0.001*cancer_pairs_posa+ normal_pairs_posa);
 				oss << " posb(cancer,normal) " << cancer_pairs_posb << "," << normal_pairs_posb << " RX: " << supporting_posb << " R:" << cancer_pairs_posb/(0.001*cancer_pairs_posb+ normal_pairs_posb) << endl;
 
-
+				//print also the next edge
+				double next_ccov=0.0;
+				double next_ncov=0.0;
+				unsigned int bp=0;
+				set<pos>::iterator sit = bps.find(last.posb);
+				if (last.is_forward()) {
+					pos previous = last.posb;
+					while (sit!=bps.end() && bp<MAX_EDGE_SIZE) {
+						sit++;
+						pos p = *sit;
+						edge e = edge(previous,p);
+						bp+=e.length();
+						edge_info ei = edges[e];
+						next_ccov += ei.cancer_coverage;
+						next_ncov += ei.normal_coverage;
+						previous=*sit;
+						if (free_edges[p].size()>0) {
+							break;
+						}
+					}
+				} else {
+					pos previous = last.posb;
+					while (sit!=bps.begin() && bp<MAX_EDGE_SIZE) {
+						sit--;
+						pos p = *sit;
+						edge e = edge(previous,p);
+						bp+=e.length();
+						edge_info ei = edges[e];
+						next_ccov += ei.cancer_coverage;
+						next_ncov += ei.normal_coverage;
+						previous=*sit;
+						if (free_edges[p].size()>0) {
+							break;
+						}
+					}
+				}
+				oss << "\t\tncov: " << next_ncov << " ccov: " << next_ccov << " length: " << bp <<  endl;
+				
+				
 
 				start=e;
 				last=e;
@@ -803,7 +933,9 @@ vector<state> state::children() {
 		edge fe = edge(last_pos,*sit);
 		if (fpath_set.find(fe)!=fpath_set.end() || fpath_set.find(fe.reverse())!=fpath_set.end() || fpath_set.size()==MAX_FREE) {
 			//already used this free edge
-			continue;
+			if (!MULTI_FREE_EDGE) {
+				continue;
+			}
 		}
 		edge_info fei = edges[fe];
 		//can enter the edge?
@@ -866,6 +998,8 @@ vector<state> state::children() {
 		if (!(to_add==fake_edge)) {
 			state child = state(*this,to_add);
 			child.bp_check=true;
+			//enforce coverage change
+			child.max_flow=MAX(child.max_flow,last_edge.bound_cp());	
 			children.push_back(child);
 		}
 	}
@@ -1017,15 +1151,16 @@ void read_cov(char * filename, bool normal) {
 	}
 
 	//the read shunt
-	/*for (int i=0; i<6; i++) {
+	for (int i=0; i<6; i++) {
 		int read = gzread(gzf,buffer+size_so_far,chunk);
 		size_so_far+=read;
 		cerr << "Warning!!!!" << endl;
 		buffer=(char*)realloc(buffer,size_so_far+chunk);
 	}
-	size_so_far=(size_so_far/soe)*soe;*/
+	size_so_far=(size_so_far/soe)*soe;
 
 	//the real read loop
+	/*
 	while (!gzeof(gzf)) {
 		int read = gzread(gzf,buffer+size_so_far,chunk);
 		cerr << "\rRead so far " << size_so_far;
@@ -1039,7 +1174,7 @@ void read_cov(char * filename, bool normal) {
 			cerr << " FALLED TO REALLOC " << endl;
 			exit(1);
 		}
-	}
+	}*/
 	
 	//lets get a buffer to fit the file	
 	cerr << "Done reading file  " << size_so_far <<  endl;
@@ -1261,6 +1396,10 @@ int main(int argc, char ** argv) {
 			{
 				if (skip_edges.find(e)!=skip_edges.end()) {
 					skip=true;
+					state edge_best = edge_bests[e];
+					if (edge_best.score>best_state.score) {
+						best_state=edge_best;
+					}
 				}		
 				cerr << "\r" << i << " thread " << omp_get_thread_num() << "   ";
 			}
@@ -1350,11 +1489,11 @@ int main(int argc, char ** argv) {
 		}
 
 		//and remove the free edges
-		for (multiset<edge>::iterator msi=best_state.fpath_set.begin(); msi!=best_state.fpath_set.end(); msi++) {
+		/*for (multiset<edge>::iterator msi=best_state.fpath_set.begin(); msi!=best_state.fpath_set.end(); msi++) {
 			edge e = *msi;
 			free_edges[e.posa].erase(e.posb);
 			free_edges[e.posb].erase(e.posa);
-		}
+		}*/
 
 			
 		//lest find out which ones we need to rerun	
@@ -1372,6 +1511,7 @@ int main(int argc, char ** argv) {
 			for (multiset<edge>::iterator sit=best_state.gpath_set.begin(); sit!=best_state.gpath_set.end(); sit++) {
 				edge ea = *sit;
 				edge eb = e.reverse();
+
 				for (multiset<edge>::iterator ssit=edge_best.gpath_set.begin(); ssit!=edge_best.gpath_set.end(); ssit++) {
 					if (*ssit==ea || *ssit==eb) {
 						overlap=true;
@@ -1383,6 +1523,7 @@ int main(int argc, char ** argv) {
 			} else {
 				#pragma omp critical
 				{
+					edge_bests[e]=state();
 					skip_edges.insert(e);	
 				}
 			}	
