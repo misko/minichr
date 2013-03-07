@@ -397,6 +397,10 @@ edge_info::edge_info() {
 //
 
 double state::score_with_flow(int flow) {
+	if (flow<0 || flow>=MAX_FLOW) {
+		cerr << "INVALID FLOW!";
+		exit(1);
+	}
 	//score regardless of edge sizes
 	/*double base_unexplained=ccov-ncov;
 	if (base_unexplained<0) {
@@ -565,7 +569,7 @@ void state::best_score() {
 			edge curr = gpath_vector[i];
 			if (prev.posb!=curr.posa) {
 				//enforce coverage change
-				max_flow=MAX(max_flow,prev.bound_cp());
+				max_flow=MIN(max_flow,prev.bound_cp());
 			}
 	}	
 	//find the best score and cp
