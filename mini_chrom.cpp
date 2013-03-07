@@ -21,8 +21,6 @@
 
 #define ZERO 1e-5
 
-#define MULTI_FREE_EDGE	false
-#define COVERAGE_BOUND	true
 
 #define MAX_EDGE_SIZE 2400
 #define MIN(a,b) (((a)<(b))?(a):(b))
@@ -161,8 +159,25 @@ class state_hash {
 
 //some global variables
 set<pos> bps;
+
 map<edge, edge_info > edges;
+edge_info re_edges(edge & key) {
+	if (edges.find(key)==edges.end()) {
+		cerr << "ERROR IN EDGE LOOKUP" << endl;
+		exit(1);
+	}
+	return edges[key];
+}
+
 map<pos, set<pos> > free_edges;
+set<pos> re_free_edges(pos & key) {
+	if (free_edges.find(key)==free_edges.end()) {
+		cerr << "ERROR IN FREE EDGE LOOKUP" << endl;
+		exit(1);
+	}
+	return free_edges[key];
+}
+
 map<pos, double> cancer_pair_coverage;
 map<pos, double> normal_pair_coverage;
 unsigned int total_normal_pair_arcs;
@@ -282,13 +297,13 @@ bool edge::is_forward() {
 }
 
 unsigned int edge::bound_cp() {
-	if (!COVERAGE_BOUND) {
+	#ifndef COVERAGE_BOUND
 		return MAX_FLOW;
-	}
+	#endif
 	//get forward coverage
 	double next_ncov=0.0;
 	double next_ccov=0.0;
-	unsigned int next_bp;
+	unsigned int next_bp=0;
 	set<pos>::iterator sit = bps.find(posb);
 	if (is_forward()) {
 		pos previous = posb;
@@ -297,11 +312,11 @@ unsigned int edge::bound_cp() {
 			pos p = *sit;
 			edge e = edge(previous,p);
 			next_bp+=e.length();
-			edge_info ei = edges[e];
+			edge_info ei = re_edges(e);
 			next_ccov += ei.cancer_coverage;
 			next_ncov += ei.normal_coverage;
 			previous=*sit;
-			if (free_edges[p].size()>0) {
+			if (re_free_edges(p).size()>0) {
 				break;
 			}
 		}
@@ -312,11 +327,11 @@ unsigned int edge::bound_cp() {
 			pos p = *sit;
 			edge e = edge(previous,p);
 			next_bp+=e.length();
-			edge_info ei = edges[e];
+			edge_info ei = re_edges(e);
 			next_ccov += ei.cancer_coverage;
 			next_ncov += ei.normal_coverage;
 			previous=*sit;
-			if (free_edges[p].size()>0) {
+			if (re_free_edges(p).size()>0) {
 				break;
 			}
 		}
@@ -324,7 +339,7 @@ unsigned int edge::bound_cp() {
 	//get backward coverage
 	double prev_ncov=0.0;
 	double prev_ccov=0.0;
-	unsigned int prev_bp;
+	unsigned int prev_bp=0;
 	sit = bps.find(posa);
 	if (!is_forward()) {
 		pos previous = posa;
@@ -333,11 +348,11 @@ unsigned int edge::bound_cp() {
 			pos p = *sit;
 			edge e = edge(previous,p);
 			prev_bp+=e.length();
-			edge_info ei = edges[e];
+			edge_info ei = re_edges(e);
 			prev_ccov += ei.cancer_coverage;
 			prev_ncov += ei.normal_coverage;
 			previous=*sit;
-			if (free_edges[p].size()>0) {
+			if (re_free_edges(p).size()>0) {
 				break;
 			}
 		}
@@ -348,11 +363,11 @@ unsigned int edge::bound_cp() {
 			pos p = *sit;
 			edge e = edge(previous,p);
 			prev_bp+=e.length();
-			edge_info ei = edges[e];
+			edge_info ei = re_edges(e);
 			prev_ccov += ei.cancer_coverage;
 			prev_ncov += ei.normal_coverage;
 			previous=*sit;
-			if (free_edges[p].size()>0) {
+			if (re_free_edges(p).size()>0) {
 				break;
 			}
 		}
@@ -363,7 +378,7 @@ unsigned int edge::bound_cp() {
 	double prev_ratio=prev_ccov/(0.001*prev_ccov+prev_ncov);
 
 	double bound = MAX(0,prev_ratio-next_ratio);
-	return ceil(bound)+3;
+	return ceil(bound)+MIN_FLOW+1;
 
 }
 
@@ -431,10 +446,10 @@ void state::add_edge(edge e, bool append) {
 	//fix up ncov,ccov,pcov
 	if (gpath_set.find(e)==gpath_set.end() && gpath_set.find(e.reverse())==gpath_set.end()) {
 		//add to ncov and ccov
-		ncov+=edges[e].normal_coverage;
-		ccov+=edges[e].cancer_coverage;	
+		ncov+=re_edges(e).normal_coverage;
+		ccov+=re_edges(e).cancer_coverage;	
 	}	
-	pcov+=edges[e].normal_coverage;
+	pcov+=re_edges(e).normal_coverage;
 
 	//check if used a free edge
 	if (gpath_vector.size()>0) {
@@ -443,6 +458,7 @@ void state::add_edge(edge e, bool append) {
 			if (x.posb!=e.posa) {
 				//used a free edge	
 				fpath_set.insert(edge(x.posb,e.posa));
+				re_free_edges(x.posb); //make sure it exits, give error if not
 				if (free_edges[x.posb].find(e.posa)==free_edges[x.posb].end()) {
 					cerr << "FAILED TO FIND EARLZ" << endl;
 					exit(1);
@@ -453,6 +469,7 @@ void state::add_edge(edge e, bool append) {
 			if (x.posa!=e.posb) {
 				//used a free edge	
 				fpath_set.insert(edge(e.posb,x.posa));
+				re_free_edges(e.posb); //make sure it exits, give error if not
 				if (free_edges[e.posb].find(x.posa)==free_edges[e.posb].end()) {
 					cerr << "FAILED TO FIND EARLY " << e.posa.chr << ":" << e.posa.coord << " " << e.posb.chr << ":" << e.posb.coord << " " << x.posa.chr << ":" << x.posa.coord << " " << x.posb.chr << ":" << x.posb.coord << " " << endl;
 					exit(1);
@@ -488,7 +505,7 @@ void state::add_edge(edge e, bool append) {
 }
 
 void state::add_edge_to_score(edge e) {
-	edge_info ei = edges[e];
+	edge_info ei = re_edges(e);
 	double ebase=abs(ei.normal_coverage-ei.cancer_coverage);
 
 	//find out how many times it has been used
@@ -517,7 +534,7 @@ void state::best_score() {
 				cerr << "ANOTHER BIG ERRO!" << endl;
 				exit(1);
 			}
-			edge_info ei = edges[fe];
+			edge_info ei = re_edges(fe);
 			/*if (free_edges[fe.posa].size()==0 || free_edges[fe.posb].size()==0) {
 				cerr << "THIS IS NOT A FREE EDGE " << fe.posa.chr << ":" << fe.posa.coord << " " << fe.posb.chr << ":" << fe.posb.coord << endl;
 				exit(1);
@@ -543,6 +560,14 @@ void state::best_score() {
 			max_flow=MIN(MAX(supporting_posa,supporting_posb),max_flow);
 
 	} 
+	for (unsigned int i=1; i<gpath_vector.size(); i++) {
+			edge prev = gpath_vector[i-1];
+			edge curr = gpath_vector[i];
+			if (prev.posb!=curr.posa) {
+				//enforce coverage change
+				max_flow=MAX(max_flow,prev.bound_cp());
+			}
+	}	
 	//find the best score and cp
 	double best_score=0;
 	int best_flow=-1;
@@ -624,7 +649,7 @@ bool state::is_dup() {
 	edge first_e = gpath_vector[0];
 	set<pos>::iterator sit;
 	sit=bps.find(first_e.posa);
-	while (bp_so_far<bp_range && sit->chr==first_e.posa.chr) {
+	while (bp_so_far<bp_range && sit->chr==first_e.posa.chr && sit!=bps.begin() && sit!=bps.end()) {
 		pos old_point = *sit;
 		if (first_e.is_forward()) {
 			sit--;
@@ -737,8 +762,8 @@ string state::str() {
 		edge start = gpath_vector[0];	
 		edge last = gpath_vector[0];
 		//oss << "X" << start.posa.chr << ":" << start.posa.coord << " " << start.posb.chr << ":" << start.posb.coord << endl;
-		double nc = edges[start].normal_coverage;
-		double cc = edges[start].cancer_coverage;
+		double nc = re_edges(start).normal_coverage;
+		double cc = re_edges(start).cancer_coverage;
 		int len = start.length();
 		for (unsigned int i=1; i<gpath_vector.size(); i++) {
 			edge e = gpath_vector[i];
@@ -749,8 +774,8 @@ string state::str() {
 			if (e.posa==last.posb && (e.is_forward()==last.is_forward())) {
 				//keep it going
 				last=e;
-				nc+=edges[e].normal_coverage;
-				cc+=edges[e].cancer_coverage;
+				nc+=re_edges(e).normal_coverage;
+				cc+=re_edges(e).cancer_coverage;
 				len += e.length();
 			} else {
 				
@@ -760,12 +785,14 @@ string state::str() {
 
 
 				edge free_edge = edge(last.posb,e.posa);
+				re_edges(free_edge); re_free_edges(last.posb); // make sure they exist!
 				if (edges.find(free_edge)==edges.end() || free_edges[last.posb].find(e.posa)==free_edges[last.posb].end()) {
 					cerr << "Could not find the free edge!"  << endl;
 					cerr << oss.str() << endl;
 					exit(1);
 				}
-				edge_info ei = edges[edge(last.posb,e.posa)];
+				edge ex = edge(last.posb,e.posa);
+				edge_info ei = re_edges(ex);
 				if (normal_pair_coverage.find(e.posa)==normal_pair_coverage.end()) {
 					cerr << "ANOTHER BIG ERRO! xCz" << e.posa.chr << " :" << e.posa.coord << endl;
 					exit(1);
@@ -799,11 +826,11 @@ string state::str() {
 						pos p = *sit;
 						edge e = edge(previous,p);
 						bp+=e.length();
-						edge_info ei = edges[e];
+						edge_info ei = re_edges(e);
 						next_ccov += ei.cancer_coverage;
 						next_ncov += ei.normal_coverage;
 						previous=*sit;
-						if (free_edges[p].size()>0) {
+						if (re_free_edges(p).size()>0) {
 							break;
 						}
 					}
@@ -814,11 +841,11 @@ string state::str() {
 						pos p = *sit;
 						edge e = edge(previous,p);
 						bp+=e.length();
-						edge_info ei = edges[e];
+						edge_info ei = re_edges(e);
 						next_ccov += ei.cancer_coverage;
 						next_ncov += ei.normal_coverage;
 						previous=*sit;
-						if (free_edges[p].size()>0) {
+						if (re_free_edges(p).size()>0) {
 							break;
 						}
 					}
@@ -830,15 +857,15 @@ string state::str() {
 				start=e;
 				last=e;
 				len=start.length();
-				nc=edges[start].normal_coverage;
-				cc=edges[start].cancer_coverage;
+				nc=re_edges(start).normal_coverage;
+				cc=re_edges(start).cancer_coverage;
 			}
 		}
 		edge e = gpath_vector.back();
 		oss << "\t" << start.posa.chr << ":" << start.posa.coord << " ~ " << last.posb.chr << ":" << last.posb.coord  << " [ " << len << " ] ";
 		oss << " ncov: " << nc << " ccov: " << cc  << (start.posa<last.posb ? "\t+" : "\t-" )  << endl;
 		oss << "\t\t" << e.posa.chr << ":" << e.posa.coord << " ~ " << e.posb.chr << ":" << e.posb.coord  << " [ " << "?" << " ] ";
-		oss << " ncov: " << edges[e].normal_coverage << " ccov: " << edges[e].cancer_coverage  << (start.posa<last.posb ? "\t+" : "\t-" )  << endl;
+		oss << " ncov: " << re_edges(e).normal_coverage << " ccov: " << re_edges(e).cancer_coverage  << (start.posa<last.posb ? "\t+" : "\t-" )  << endl;
 	}
 	
 	if (exitb) {
@@ -902,7 +929,7 @@ vector<state> state::children() {
 				break;
 			}
 			edge e = edge(last_pos,current_pos);
-			
+			//cerr << "WARNING" << e.bound_cp() << endl;	
 			state child;
 			//want to add child with this edge on it
 			if (children.size()==0) {
@@ -929,15 +956,16 @@ vector<state> state::children() {
 	last_edge = gpath_vector.back();
 	second_last_pos = last_edge.posa;
 	last_pos = last_edge.posb;
+	re_free_edges(last_pos); //make sure it exists
 	for (set<pos>::iterator sit = free_edges[last_pos].begin(); sit!=free_edges[last_pos].end(); sit++) {
 		edge fe = edge(last_pos,*sit);
+		#ifndef MULTI_FREE_EDGE
 		if (fpath_set.find(fe)!=fpath_set.end() || fpath_set.find(fe.reverse())!=fpath_set.end() || fpath_set.size()==MAX_FREE) {
 			//already used this free edge
-			if (!MULTI_FREE_EDGE) {
-				continue;
-			}
+			continue;
 		}
-		edge_info fei = edges[fe];
+		#endif
+		edge_info fei = re_edges(fe);
 		//can enter the edge?
 		//
 		int type = fei.type;
@@ -998,8 +1026,6 @@ vector<state> state::children() {
 		if (!(to_add==fake_edge)) {
 			state child = state(*this,to_add);
 			child.bp_check=true;
-			//enforce coverage change
-			child.max_flow=MAX(child.max_flow,last_edge.bound_cp());	
 			children.push_back(child);
 		}
 	}
@@ -1103,6 +1129,11 @@ void read_links(char * filename) {
 		pos posa=pos(nchra,bpa);
 		pos posb=pos(nchrb,bpb);
 
+		if (nchra>26 || nchrb>26) {
+			cerr << "ERROR READING IN LINKS" << endl;
+			exit(1);
+		}
+
 		bps.insert(posa);
 		bps.insert(posb);
 
@@ -1143,6 +1174,7 @@ void read_cov(char * filename, bool normal) {
 	//find the size of one entry
 	size_t soe = sizeof(unsigned short)+sizeof(unsigned int)+sizeof(unsigned short);
 	size_t chunk = 1024*1024*1024;
+	//size_t chunk = 64*1024*1024;
 	size_t size_so_far = 0;
 	char * buffer = (char*) malloc(chunk);
 	if (buffer==NULL) {
@@ -1151,16 +1183,16 @@ void read_cov(char * filename, bool normal) {
 	}
 
 	//the read shunt
-	for (int i=0; i<6; i++) {
+	/*for (int i=0; i<2; i++) {
 		int read = gzread(gzf,buffer+size_so_far,chunk);
 		size_so_far+=read;
 		cerr << "Warning!!!!" << endl;
 		buffer=(char*)realloc(buffer,size_so_far+chunk);
 	}
-	size_so_far=(size_so_far/soe)*soe;
+	size_so_far=(size_so_far/soe)*soe;*/
+
 
 	//the real read loop
-	/*
 	while (!gzeof(gzf)) {
 		int read = gzread(gzf,buffer+size_so_far,chunk);
 		cerr << "\rRead so far " << size_so_far;
@@ -1174,7 +1206,7 @@ void read_cov(char * filename, bool normal) {
 			cerr << " FALLED TO REALLOC " << endl;
 			exit(1);
 		}
-	}*/
+	}
 	
 	//lets get a buffer to fit the file	
 	cerr << "Done reading file  " << size_so_far <<  endl;
@@ -1182,12 +1214,12 @@ void read_cov(char * filename, bool normal) {
 	size_t sz = size_so_far;	
 
 	unsigned int entries = sz/soe;
-	map<pair<int,unsigned int> , double> m;
 	unsigned long total_coverage=0;
 
+	cerr << "started processing" << endl;
 
-	map<edge, edge_info > edges_ret;
 	
+	//omp_set_num_threads(MIN(24,THREADS));
 	#pragma omp parallel 
 	{
 	unsigned int threads = omp_get_num_threads();
@@ -1202,6 +1234,7 @@ void read_cov(char * filename, bool normal) {
 
 	unsigned short chr, cov;
 	unsigned int coord;
+	//cerr << "started processing x2" << endl;
 	for (unsigned int i=0; i<entries; i++) {
 		if (i%threads!=thread_id) {
 			continue; // not our job!
@@ -1242,6 +1275,7 @@ void read_cov(char * filename, bool normal) {
 	#pragma omp critical 
 	{
 		//iterator over thread specific and add to main
+		//cerr << " done processing critical " << thread_id << endl;
 		total_coverage+=total_coverage_t;
 		for (map<edge,edge_info>::iterator mit=edges_t.begin(); mit!=edges_t.end(); mit++) {
 			edges[mit->first].normal_coverage+=mit->second.normal_coverage;
@@ -1249,7 +1283,8 @@ void read_cov(char * filename, bool normal) {
 		}
 	}
 	} //end openmp section
-
+	cerr << " done processing " << endl;
+	
 	for (map<edge,edge_info>::iterator mit=edges.begin(); mit!=edges.end(); mit++) {
 		if (normal) {
 			edges[mit->first].normal_coverage/=total_coverage;
@@ -1274,7 +1309,6 @@ int main(int argc, char ** argv) {
 	char * cov_normal_filename=argv[3];
 	char * pairs_cancer_filename=argv[4];
 	char * pairs_normal_filename=argv[5];
-	omp_set_num_threads(THREADS);
 	//read in the free edges
 	read_links(links_filename);
 
@@ -1284,10 +1318,17 @@ int main(int argc, char ** argv) {
 	read_arcs(pairs_normal_filename,true);	
 	read_arcs(pairs_cancer_filename,false);	
 
+	cerr << "Slicing edges" << endl;
+	//cerr << "Slicing WARNING edges" << endl;
 	//lets slice up the rest
 	set<pos> to_add;
+	//unsigned int i=0;
 	for (set<pos>::iterator it=bps.begin(); it!=bps.end(); ) {
 		pos current=*it;
+		/*i++;
+		if (i>2000) {
+			break;
+		}*/
 		//cout << current.chr << ":" << current.coord << endl;
 		it++;
 		pos next=*it;
@@ -1303,10 +1344,15 @@ int main(int argc, char ** argv) {
 		}
 	}
 	for (set<pos>::iterator it=to_add.begin(); it!=to_add.end(); it++) {
+		if ( (*it).chr>26 ) {
+			cerr << "ERROR IN SPLICING!" << endl;
+			exit(1);
+		}
 		bps.insert(*it);
 	}
 
 	
+	cerr << "Init edges" << endl;
 	//initialize the rest of the edges, so can multithread
 	for (set<pos>::iterator it=bps.begin(); it!=bps.end(); ) {
 		free_edges[*it].size();		
@@ -1346,7 +1392,7 @@ int main(int argc, char ** argv) {
 		if (current.chr==previous.chr) {
 			edge ea = edge(previous,current);
 			edge eb = ea.reverse();
-			if (free_edges[ea.posa].size()>0 || free_edges[ea.posb].size()>0) {
+			if (re_free_edges(ea.posa).size()>0 || re_free_edges(ea.posb).size()>0) {
 				start_edges.push_back(ea);
 				start_edges.push_back(eb);
 			}
@@ -1373,6 +1419,7 @@ int main(int argc, char ** argv) {
 		}
 	}
 	exit(1);*/	
+	omp_set_num_threads(THREADS);
 
 	//The main loop
 	state best_state;
@@ -1478,12 +1525,12 @@ int main(int argc, char ** argv) {
 		//lets change out the path
 		for (unsigned int i=0; i<best_state.gpath_vector.size(); i++) {
 			edge e = best_state.gpath_vector[i];
-			edge_info ei = edges[e];
+			edge_info ei = re_edges(e);
 			ei.cancer_coverage -= ei.normal_coverage*best_state.cp;	
 			edges[e]=ei;
 		
 			edge er = e.reverse();
-			edge_info eri = edges[e];
+			edge_info eri = re_edges(er);
 			eri.cancer_coverage -= eri.normal_coverage*best_state.cp;			
 			edges[er]=eri;
 		}
@@ -1529,6 +1576,6 @@ int main(int argc, char ** argv) {
 			}	
 		}
 	} while (best_state.score>ZERO);
-	
+	cerr << "CLEAN" << endl;	
 	return 0;
 }
