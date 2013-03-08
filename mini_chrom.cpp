@@ -16,8 +16,8 @@
 #define THREADS	32
 
 #define MIN_FLOW 4
-#define MAX_FLOW 30
-#define MAX_FREE 20
+#define MAX_FLOW 20
+#define MAX_FREE 30
 
 #define ZERO 1e-5
 
