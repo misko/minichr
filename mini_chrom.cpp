@@ -17,9 +17,9 @@
 
 #define MIN_FLOW 4
 #define MAX_FLOW 20
-#define MAX_FREE 30
+#define MAX_FREE 40
 
-#define ZERO 1e-5
+#define ZERO 1e-6
 
 
 #define MAX_EDGE_SIZE 2400
@@ -567,7 +567,8 @@ void state::best_score() {
 	for (unsigned int i=1; i<gpath_vector.size(); i++) {
 			edge prev = gpath_vector[i-1];
 			edge curr = gpath_vector[i];
-			if (prev.posb!=curr.posa) {
+			//if (prev.posb!=curr.posa) {
+			if (re_free_edges(prev.posb).size()>0) { 
 				//enforce coverage change
 				max_flow=MIN(max_flow,prev.bound_cp());
 			}
