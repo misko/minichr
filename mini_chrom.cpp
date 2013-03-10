@@ -17,9 +17,9 @@
 
 #define MIN_FLOW 4
 #define MAX_FLOW 20
-#define MAX_FREE 40
+#define MAX_FREE 30
 
-#define ZERO 1e-6
+#define ZERO 1e-5
 
 
 #define MAX_EDGE_SIZE 2400
@@ -103,7 +103,7 @@ class state {
 		vector<state> children();
 
 		//scoring
-		void best_score();
+		void best_score(bool just_last);
 		double score_with_flow(int flow);
 		bool go_on();
 		double tail_check();
@@ -178,6 +178,7 @@ set<pos> re_free_edges(pos & key) {
 	return free_edges[key];
 }
 
+map<edge, int> free_edges_bound;
 map<pos, double> cancer_pair_coverage;
 map<pos, double> normal_pair_coverage;
 unsigned int total_normal_pair_arcs;
@@ -307,8 +308,8 @@ unsigned int edge::bound_cp() {
 	set<pos>::iterator sit = bps.find(posb);
 	if (is_forward()) {
 		pos previous = posb;
+		sit++;
 		while (sit!=bps.end() && next_bp<MAX_EDGE_SIZE) {
-			sit++;
 			pos p = *sit;
 			edge e = edge(previous,p);
 			next_bp+=e.length();
@@ -319,6 +320,7 @@ unsigned int edge::bound_cp() {
 			if (re_free_edges(p).size()>0) {
 				break;
 			}
+			sit++;
 		}
 	} else {
 		pos previous = posb;
@@ -502,7 +504,11 @@ void state::add_edge(edge e, bool append) {
 
 
 	//find the best score
-	best_score();
+	if (append) {
+		best_score(true);
+	} else {
+		best_score(false);
+	}
 
 	//make sure that this is not accidently set
 	bp_check=false;
@@ -530,7 +536,7 @@ void state::add_edge_to_score(edge e) {
 	}
 }
 
-void state::best_score() {
+void state::best_score(bool just_last) {
 	//find bounds
 	for (set<edge>::iterator fit=fpath_set.begin(); fit!=fpath_set.end(); fit++) {
 			edge fe = *fit;
@@ -564,15 +570,23 @@ void state::best_score() {
 			max_flow=MIN(MAX(supporting_posa,supporting_posb),max_flow);
 
 	} 
-	for (unsigned int i=1; i<gpath_vector.size(); i++) {
-			edge prev = gpath_vector[i-1];
-			edge curr = gpath_vector[i];
-			//if (prev.posb!=curr.posa) {
-			if (re_free_edges(prev.posb).size()>0) { 
-				//enforce coverage change
-				max_flow=MIN(max_flow,prev.bound_cp());
-			}
-	}	
+	if (just_last) {
+		edge last = gpath_vector.back();
+		if (re_free_edges(last.posb).size()>0) {
+			max_flow=MIN(max_flow,last.bound_cp());
+
+		}
+	} else {
+		for (unsigned int i=1; i<gpath_vector.size(); i++) {
+				edge prev = gpath_vector[i-1];
+				edge curr = gpath_vector[i];
+				//if (prev.posb!=curr.posa) {
+				if (re_free_edges(prev.posb).size()>0) { 
+					//enforce coverage change
+					max_flow=MIN(max_flow,prev.bound_cp());
+				}
+		}	
+	}
 	//find the best score and cp
 	double best_score=0;
 	int best_flow=-1;
@@ -604,7 +618,7 @@ state::state(edge e) {
 	//add in the edge
 	append_edge(e);
 	//find the best score
-	best_score();
+	best_score(false);
 	//lets make sure we set this to explorable
 	bp_check=false;
 }
@@ -622,7 +636,7 @@ state::state(vector<edge> ve) {
 	}
 
 	//find the best score
-	best_score();
+	best_score(false);
 	bp_check=false;
 }
 
@@ -634,7 +648,7 @@ state::state(state s, edge e) {
 	append_edge(e);
 
 	//find the best score
-	best_score();
+	best_score(true);
 
 	//make sure bp_check is not set
 	bp_check=false;
