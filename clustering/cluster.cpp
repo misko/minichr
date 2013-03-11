@@ -274,10 +274,16 @@ int main(int argc, char ** argv) {
 
 	cerr << "Using mean " << mean << " and stddev " << stddev << endl;
 
+	unsigned int read = 0;
+
 	//got from online to read tab input
 	char const row_delim = '\n';
 	char const field_delim = '\t';
 	for (string row; getline(cin, row, row_delim); ) {
+		read++;
+		if (read%1000000==0) {
+			cerr << "\r" << "read: " << read << "     "; 
+		}
 		vector<string> v_row;
 		istringstream ss(row);
 		for (string field; getline(ss, field, field_delim); ) {
@@ -311,6 +317,9 @@ int main(int argc, char ** argv) {
 				double isize=1000*mean; //TODO: HARD THRESHOLD
 				if (mate_chr==my_chr) {
 					isize=atof(v_row[8].c_str());
+					if (isize<0) {
+						isize=-isize;
+					}
 				}
 
 				if (isize<(WEIRD_STDDEV*stddev+mean)) {
@@ -336,6 +345,8 @@ int main(int argc, char ** argv) {
 						right=my;
 					}
 
+
+					
 					clusters[key.first][key.second].lefts.insert(left);					
 					clusters[key.first][key.second].rights.insert(right);					
 
