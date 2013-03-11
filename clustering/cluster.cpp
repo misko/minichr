@@ -377,6 +377,7 @@ int main(int argc, char ** argv) {
 	rows.reserve(READ_SIZE);
 	while (true) {
 		//read in a million
+		rows.clear();
 		char buffer[1024];
 		unsigned int read = 0;
 		for (string row; getline(cin, row, row_delim); ) {
