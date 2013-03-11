@@ -15,8 +15,8 @@ using namespace std;
 
 #define UNMAPPED	0x4
 #define M_UNMAPPED	0x8
-#define REVERSE		0x1
-#define M_REVERSE	0x2
+#define REVERSE		0x10
+#define M_REVERSE	0x20
 
 #define WEIRD_STDDEV	4
 #define MAX_STDDEV	15
@@ -149,6 +149,36 @@ pos set_min(multiset<pos> s) {
 	return x;
 }
 
+
+unsigned int cigar_len(const char * s) {
+	unsigned int len=0;
+	unsigned int xlen=0;
+	for (int i=0; i<strlen(s); i++) {
+		if (isdigit(s[i])) {
+			//keep going
+			xlen=xlen*10+(s[i]-48);
+		} else {
+			//ok lets process the op
+			switch(s[i]) {
+				case 'M':
+				case 'D':
+					len+=xlen;
+					break;
+				case 'I':
+				case 'S':
+					break;
+				default:
+					cerr << "Failed to handle cigar op " << s[i] << endl;
+					exit(1);		
+			}
+			xlen=0;
+		}
+	}
+	//cerr << "CIGAR " << s << " " << len << endl;
+	return len;
+}
+
+
 pair<pos, pos> find_cluster(pos & a, pos & b) {
 
 	if (a>b) {
@@ -264,14 +294,19 @@ int main(int argc, char ** argv) {
 				string qname = v_row[0];
 				int my_chr = to_chr(v_row[2].c_str());
 				unsigned long my_pos = atol(v_row[3].c_str());
-				bool my_strand = !(flags & REVERSE);
+				bool my_strand = ((flags & REVERSE)==0);
+
+				if (my_strand) {
+					string my_cigar = v_row[5];
+					my_pos+=cigar_len(my_cigar.c_str());
+				}
 
 				int mate_chr = my_chr;
 				if (v_row[6].c_str()[0]!='=') {
 					mate_chr = to_chr(v_row[6].c_str());	
 				}
 				unsigned long mate_pos = atol(v_row[7].c_str());
-				bool mate_strand = !(flags & M_REVERSE);
+				bool mate_strand = ((flags & M_REVERSE)==0);
 			
 				double isize=1000*mean; //TODO: HARD THRESHOLD
 				if (mate_chr==my_chr) {
@@ -284,10 +319,10 @@ int main(int argc, char ** argv) {
 				}
 	
 
-				cerr << my_chr << ":" << my_pos << " " << mate_chr << ":" << mate_pos << endl;
+				//cerr << my_chr << ":" << my_pos << " " << mate_chr << ":" << mate_pos << endl;
 
 				if (mappings.find(qname)!=mappings.end()) {
-					cerr << "FOUND " << endl;
+					//cerr << "FOUND " << endl;
 					//lets add it to the clusters
 					pos my = pos(my_chr,my_pos,my_strand);
 					pos mate = mappings[qname];
@@ -306,7 +341,7 @@ int main(int argc, char ** argv) {
 
 				} else {
 					//need to add it to mappings
-					cerr << "ADDING " << qname << endl;
+					//cerr << "ADDING " << qname << endl;
 					mappings[qname]=pos(my_chr,my_pos,my_strand);
 				}
 				
@@ -314,7 +349,6 @@ int main(int argc, char ** argv) {
 		}
 	}
 
-					cerr << "CLUSTER FOUND " << endl;
 	//print out the clusters
 	for (map<pos , map< pos, cluster> >::iterator it=clusters.begin(); it!=clusters.end(); it++) {
 		pos posa = it->first;
@@ -333,8 +367,39 @@ int main(int argc, char ** argv) {
 			} else {
 				right_bound=set_min(c.rights);
 			}
-			cerr << "CLUSTER" << endl;	
-			cerr << left_bound.chr << ":" << left_bound.coord << left_bound.strand << "\t" << right_bound.chr << ":" << right_bound.coord << right_bound.strand << " " << c.lefts.size() << endl;
+
+			//get the type
+			int type=5;
+			if (c.left_strand == !c.right_strand) {
+				if (c.left_strand) {
+					cout << "0\t" << left_bound.chr << ":" << left_bound.coord << left_bound.strand << "\t";
+					cout << right_bound.chr << ":" << right_bound.coord << right_bound.strand << " " << c.lefts.size() << endl;
+	
+					cout << "1\t" << right_bound.chr << ":" << right_bound.coord << right_bound.strand << "\t";
+					cout << left_bound.chr << ":" << left_bound.coord << left_bound.strand << " " << c.lefts.size() << endl;
+				} else {
+					cout << "1\t" << left_bound.chr << ":" << left_bound.coord << left_bound.strand << "\t";
+					cout << right_bound.chr << ":" << right_bound.coord << right_bound.strand << " " << c.lefts.size() << endl;
+	
+					cout << "0\t" << right_bound.chr << ":" << right_bound.coord << right_bound.strand << "\t";
+					cout << left_bound.chr << ":" << left_bound.coord << left_bound.strand << " " << c.lefts.size() << endl;
+				}
+			} else {
+				if (c.left_strand) {
+					cout << "2\t" << left_bound.chr << ":" << left_bound.coord << left_bound.strand << "\t";
+					cout << right_bound.chr << ":" << right_bound.coord << right_bound.strand << " " << c.lefts.size() << endl;
+	
+					cout << "2\t" << right_bound.chr << ":" << right_bound.coord << right_bound.strand << "\t";
+					cout << left_bound.chr << ":" << left_bound.coord << left_bound.strand << " " << c.lefts.size() << endl;
+				} else {
+					cout << "3\t" << left_bound.chr << ":" << left_bound.coord << left_bound.strand << "\t";
+					cout << right_bound.chr << ":" << right_bound.coord << right_bound.strand << " " << c.lefts.size() << endl;
+
+					cout << "3\t" << right_bound.chr << ":" << right_bound.coord << right_bound.strand << "\t";
+					cout << left_bound.chr << ":" << left_bound.coord << left_bound.strand << " " << c.lefts.size() << endl;
+				}
+
+			} 
 		}
 	}
 	
