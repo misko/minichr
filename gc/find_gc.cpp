@@ -21,8 +21,8 @@ using namespace std;
 #define WEIRD_STDDEV	4
 #define MAX_STDDEV	15
 
-#define SIZE_RES	10
-#define GC_RES	4
+#define SIZE_RES	1
+#define GC_RES	1
 
 class pos {
 	public:
@@ -42,10 +42,12 @@ class pos {
 
 double mean=0.0;
 double stddev=0.0;
-
+unsigned int total=0;
+map< int, unsigned int > size_totals;
 map< string , pos > mappings;
 map< int , map< int , unsigned int > > gcs;
 char * ref[25];
+size_t ref_sizes[25];
 int max_size=0;
 
 pos::pos(int chr, unsigned int coord, bool strand) {
@@ -190,6 +192,7 @@ void read_ref(char * filename) {
 				}
 				memcpy(ref_chr,buffer,length);
 				ref[chr-1]=ref_chr;
+				ref_sizes[chr-1]=length;
 				cerr << chr << endl;
 			}
 			//setup the new
@@ -221,6 +224,7 @@ void read_ref(char * filename) {
 		}
 		memcpy(ref_chr,buffer,length);
 		ref[chr-1]=ref_chr;
+		ref_sizes[chr-1]=length;
 		cerr << chr << endl;
 	}
 
@@ -235,8 +239,8 @@ int get_gc(pos left, pos right) {
 	int n=0;
 	int gc=0;
 	int at=0;
-	for (unsigned int i=left.coord-1; i<right.coord; i++) {
-		char c = ref[left.chr][i];
+	for (unsigned int i=MAX(1,left.coord)-1; i<MIN(ref_sizes[left.chr-1],right.coord); i++) {
+		char c = ref[left.chr-1][i];
 		switch (c) {
 			case 'a':
 			case 't':
@@ -289,7 +293,7 @@ int main(int argc, char ** argv) {
 		//ok now we have a line lets check it out
 		if (v_row[0].c_str()[0]=='@') {
 			//its header
-			cerr << row << endl;
+			//cerr << row << endl;
 		} else {
 			int flags = atoi(v_row[1].c_str());
 			//check if both are mapped
@@ -317,10 +321,10 @@ int main(int argc, char ** argv) {
 				}
 	
 
-				cerr << my_chr << ":" << my_pos << (my_strand ?  "+" : "-" )  << " " << mate_chr << ":" << mate_pos  << (mate_strand ? "+" : "-" ) << endl;
+				//cerr << my_chr << ":" << my_pos << (my_strand ?  "+" : "-" )  << " " << mate_chr << ":" << mate_pos  << (mate_strand ? "+" : "-" ) << endl;
 
 				if (mappings.find(qname)!=mappings.end()) {
-					cerr << "FOUND " << endl;
+					//cerr << "FOUND " << endl;
 					//lets add it to the clusters
 					pos my = pos(my_chr,my_pos,my_strand);
 					pos mate = mappings[qname];
@@ -340,11 +344,23 @@ int main(int argc, char ** argv) {
 						
 					if (left.strand && !right.strand) {
 						//the only case we count it
+						/*
 						if (isize>max_size) {
 							max_size=isize;
 						}
 						int gc = get_gc(left,pos(right.chr,left.coord+isize,right.strand));
 						gcs[SIZE_RES*((int)(isize/SIZE_RES))][GC_RES*((int)(gc/GC_RES))]++;
+						total++;
+						size_totals[SIZE_RES*((int)isize/SIZE_RES)]++; */
+						max_size=400;
+						unsigned int center = left.coord + isize/2;
+						pos xleft = pos(left.chr, MAX(200,center)-200, left.strand); 
+						pos xright = pos(right.chr, center+200, right.strand); 
+						int gc = get_gc(left,right);
+						gcs[400][gc]++;
+						total++;
+						size_totals[400]++; 
+						
 						//cerr << "HAS GC " << gc << endl;
 					}
 				} else {
@@ -367,12 +383,36 @@ int main(int argc, char ** argv) {
 	cout << endl;
 
 	for (int i=1; i*SIZE_RES<=max_size; i++) {
-		cout << i*SIZE_RES << "\t";
-		for (int j=0; j*GC_RES<=max_size; j++) {
-			cout << gcs[i*SIZE_RES][j*GC_RES] << "\t" ;
+		if ((total/20)<size_totals[i*SIZE_RES]) {
+			cout << i*SIZE_RES << "\t";
+			for (int j=0; j*GC_RES<=max_size; j++) {
+				cout << gcs[i*SIZE_RES][j*GC_RES] << "\t" ;
+			}
+			cout << endl;
 		}
-		cout << endl;
-	}	
+	}
+
+	cout << endl << endl;
+
+
+	//print out fractions	
+	for (int i=1; i*SIZE_RES<=max_size; i++) {
+		if ((total/20)<size_totals[i*SIZE_RES]) {
+			cout << i*SIZE_RES << "\t";
+			for (int j=0; j*GC_RES<=i*SIZE_RES; j++) {
+				cout << ((double)j*GC_RES)/i*SIZE_RES << "\t" ;
+			}
+			cout << endl;
+
+			cout << i*SIZE_RES << "\t";
+			for (int j=0; j*GC_RES<=i*SIZE_RES; j++) {
+				cout << gcs[i*SIZE_RES][j*GC_RES] << "\t" ;
+			}
+			cout << endl;
+		}
+	}
+
+	cout << endl << endl;
 
 	return 0;	
 
