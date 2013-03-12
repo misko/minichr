@@ -1563,7 +1563,7 @@ int main(int argc, char ** argv) {
 
 			
 		//lest find out which ones we need to rerun	
-		skip_edges.empty();
+		skip_edges.clear();
 		#pragma omp parallel for schedule(dynamic,1)
 		for (unsigned int i=0; i<start_edges.size(); i++) {
 			edge e = start_edges[i];
