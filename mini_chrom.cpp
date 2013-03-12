@@ -993,7 +993,7 @@ vector<state> state::children() {
 		//can enter the edge?
 		//
 		int type = fei.type;
-		int supporting = fei.supporting;
+		double supporting = fei.supporting;
 		if (supporting<1e-15) {
 			cerr << "HUGE ERROR"  << fe.posa.chr << ":" << fe.posa.coord << " " << fe.posb.chr << ":" << fe.posb.coord << endl;	
 			exit(1);
@@ -1110,10 +1110,11 @@ unsigned long read_arcs(char * filename, bool normal) {
 		int chr = to_chr(chr_s.c_str());
 		
 		pos p = pos(chr,coord);
+		double v = ((double)arcs)/total;
 		if (normal) {		 
-			normal_pair_coverage[p]=((double)arcs)/total;
+			normal_pair_coverage[p]=v;
 		} else {
-			cancer_pair_coverage[p]=((double)arcs)/total;
+			cancer_pair_coverage[p]=v;
 		}
 		//total+=arcs;
 	}
@@ -1170,12 +1171,20 @@ void read_links(char * filename,unsigned long total_paired) {
 		bps.insert(posa);
 		bps.insert(posb);
 
+
+		double v = ((double)total)/total_paired;
+		if (v<1e-15) {
+			cerr << "ERROR: READING LINKS " << v << endl;
+			exit(1);
+		}
+		
+
 		//add the one direction
 		edge ea = edge(posa,posb);
 
 		free_edges[posa].insert(posb);
 		edges[ea].type=type;
-		edges[ea].supporting=((double)total)/total_paired;
+		edges[ea].supporting=v;
 		edges[ea].bp=ea.length();
 
 		//add the other direction
@@ -1186,7 +1195,7 @@ void read_links(char * filename,unsigned long total_paired) {
 		}
 		free_edges[posb].insert(posa);
 		edges[eb].type=type;
-		edges[eb].supporting=((double)total)/total_paired;
+		edges[eb].supporting=v;
 		edges[eb].bp=eb.length();
 	}
 	cerr << "Read " << total_links << " links from " << filename << endl;	
