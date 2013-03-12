@@ -447,35 +447,36 @@ int main(int argc, char ** argv) {
 				right_bound=set_min(c.rights);
 			}
 
+
 			//get the type
 			int type=5;
 			if (c.left_strand == !c.right_strand) {
 				if (c.left_strand) {
-					cout << "0\t" << left_bound.chr << ":" << left_bound.coord << left_bound.strand << "\t";
-					cout << right_bound.chr << ":" << right_bound.coord << right_bound.strand << " " << c.lefts.size() << endl;
+					cout << "0\t" << left_bound.chr << ":" << left_bound.coord << "\t";
+					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << endl;
 	
-					cout << "1\t" << right_bound.chr << ":" << right_bound.coord << right_bound.strand << "\t";
-					cout << left_bound.chr << ":" << left_bound.coord << left_bound.strand << " " << c.lefts.size() << endl;
+					cout << "1\t" << right_bound.chr << ":" << right_bound.coord << "\t";
+					cout << left_bound.chr << ":" << left_bound.coord << "\t" << c.lefts.size() << endl;
 				} else {
-					cout << "1\t" << left_bound.chr << ":" << left_bound.coord << left_bound.strand << "\t";
-					cout << right_bound.chr << ":" << right_bound.coord << right_bound.strand << " " << c.lefts.size() << endl;
+					cout << "1\t" << left_bound.chr << ":" << left_bound.coord << "\t";
+					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << endl;
 	
-					cout << "0\t" << right_bound.chr << ":" << right_bound.coord << right_bound.strand << "\t";
-					cout << left_bound.chr << ":" << left_bound.coord << left_bound.strand << " " << c.lefts.size() << endl;
+					cout << "0\t" << right_bound.chr << ":" << right_bound.coord << "\t";
+					cout << left_bound.chr << ":" << left_bound.coord  << "\t" << c.lefts.size() << endl;
 				}
 			} else {
 				if (c.left_strand) {
-					cout << "2\t" << left_bound.chr << ":" << left_bound.coord << left_bound.strand << "\t";
-					cout << right_bound.chr << ":" << right_bound.coord << right_bound.strand << " " << c.lefts.size() << endl;
+					cout << "2\t" << left_bound.chr << ":" << left_bound.coord << "\t";
+					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << endl;
 	
-					cout << "2\t" << right_bound.chr << ":" << right_bound.coord << right_bound.strand << "\t";
-					cout << left_bound.chr << ":" << left_bound.coord << left_bound.strand << " " << c.lefts.size() << endl;
+					cout << "2\t" << right_bound.chr << ":" << right_bound.coord << "\t";
+					cout << left_bound.chr << ":" << left_bound.coord << "\t" << c.lefts.size() << endl;
 				} else {
-					cout << "3\t" << left_bound.chr << ":" << left_bound.coord << left_bound.strand << "\t";
-					cout << right_bound.chr << ":" << right_bound.coord << right_bound.strand << " " << c.lefts.size() << endl;
+					cout << "3\t" << left_bound.chr << ":" << left_bound.coord << "\t";
+					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << endl;
 
-					cout << "3\t" << right_bound.chr << ":" << right_bound.coord << right_bound.strand << "\t";
-					cout << left_bound.chr << ":" << left_bound.coord << left_bound.strand << " " << c.lefts.size() << endl;
+					cout << "3\t" << right_bound.chr << ":" << right_bound.coord << "\t";
+					cout << left_bound.chr << ":" << left_bound.coord << "\t" << c.lefts.size() << endl;
 				}
 
 			} 
