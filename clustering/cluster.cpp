@@ -20,7 +20,7 @@ using namespace std;
 #define M_REVERSE	0x20
 
 #define WEIRD_STDDEV	4
-#define MAX_STDDEV	15
+#define MAX_STDDEV	23
 
 #define THREADS	6
 
@@ -380,13 +380,23 @@ int main(int argc, char ** argv) {
 		rows.clear();
 		char buffer[1024];
 		unsigned int read = 0;
-		for (string row; getline(cin, row, row_delim); ) {
+		
+		char row_buffer[1024*5];
+		while(fgets(row_buffer,1024*5,stdin)!=NULL) {
+			read++;
+			rows.push_back(string(row_buffer));
+			if (read==READ_SIZE) {
+				break;
+			}
+		}
+
+		/*for (string row; getline(cin, row, row_delim); ) {
 			read++;
 			rows.push_back(row);
 			if (read==READ_SIZE) {
 				break;
 			}
-		}
+		}*/
 
 		total_read+=read;
 		cerr << "\r" << "read: " << total_read << "     "; 
