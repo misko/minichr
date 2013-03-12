@@ -17,7 +17,7 @@
 
 #define MIN_FLOW 4
 #define MAX_FLOW 20
-#define MAX_FREE 30
+#define MAX_FREE 20
 
 #define ZERO 1e-5
 
@@ -70,7 +70,7 @@ class edge_info {
 		double normal_coverage;
 		double cancer_coverage;
 		unsigned int type;
-		unsigned int supporting;
+		double supporting;
 };
 
 class state {
@@ -85,7 +85,7 @@ class state {
 		double score;
 		int cp;
 		double ncov,ccov,pcov;
-		int max_flow;	
+		unsigned int max_flow;	
 
 		//constructors
 		state(edge e);
@@ -345,8 +345,8 @@ unsigned int edge::bound_cp() {
 	sit = bps.find(posa);
 	if (!is_forward()) {
 		pos previous = posa;
+		sit++;
 		while (sit!=bps.end() && prev_bp<MAX_EDGE_SIZE) {
-			sit++;
 			pos p = *sit;
 			edge e = edge(previous,p);
 			prev_bp+=e.length();
@@ -357,6 +357,7 @@ unsigned int edge::bound_cp() {
 			if (re_free_edges(p).size()>0) {
 				break;
 			}
+			sit++;
 		}
 	} else {
 		pos previous = posa;
@@ -564,10 +565,12 @@ void state::best_score(bool just_last) {
 			//int ra = 2+ceil(cancer_pairs_posa/(0.001*cancer_pairs_posa+ normal_pairs_posa));
 			//int rb = 2+ceil(cancer_pairs_posb/(0.001*cancer_pairs_posb+ normal_pairs_posb));
 			//max_flow=MIN(MAX(ra,rb),max_flow);
-			double supporting = ((double)ei.supporting)/total_normal_pair_arcs;
-			double supporting_posa = ceil(10*(supporting/(0.001*supporting + normal_pairs_posa)));
-			double supporting_posb = ceil(10*(supporting/(0.001*supporting + normal_pairs_posb)));
-			max_flow=MIN(MAX(supporting_posa,supporting_posb),max_flow);
+			double supporting = ei.supporting;
+			//double supporting_posa = ceil(10*(supporting/(0.001*supporting + normal_pairs_posa)));
+			//double supporting_posb = ceil(10*(supporting/(0.001*supporting + normal_pairs_posb)));
+			//max_flow=MIN(MAX(supporting_posa,supporting_posb),max_flow);
+			double supporting_bound = 2+ceil(supporting/(0.001*supporting + 0.5*normal_pairs_posa + 0.5*normal_pairs_posb));
+			max_flow=MIN(supporting_bound,max_flow);
 
 	} 
 	if (just_last) {
@@ -590,7 +593,7 @@ void state::best_score(bool just_last) {
 	//find the best score and cp
 	double best_score=0;
 	int best_flow=-1;
-	for (int i=MIN_FLOW; i<max_flow; i++) {
+	for (unsigned int i=MIN_FLOW; i<max_flow; i++) {
 		score=score_with_flow(i);
 		if (best_flow==-1 || best_score<score) {
 			best_flow=i;
@@ -826,10 +829,12 @@ string state::str() {
 				double normal_pairs_posb = normal_pair_coverage[e.posa];
 				//print some free edge info
 				oss << "\ttype: " <<  ei.type << " supporting: " << ei.supporting;
-				double supporting = ((double)ei.supporting)/total_normal_pair_arcs;
-				double supporting_posa = ceil(10*(supporting/(0.001*supporting + normal_pairs_posa)));
-				double supporting_posb = ceil(10*(supporting/(0.001*supporting + normal_pairs_posb)));
+				double supporting = ei.supporting;
+				double supporting_posa = ceil((supporting/(0.001*supporting + normal_pairs_posa)));
+				double supporting_posb = ceil((supporting/(0.001*supporting + normal_pairs_posb)));
+				double supporting_bound = 2+ceil(supporting/(0.001*supporting + 0.5*normal_pairs_posa + 0.5*normal_pairs_posb));
 				//max_flow=MIN(3*MAX(supporting_posa,supporting_posb),max_flow);
+				oss << " SUP: " << supporting_bound ;
 				oss << " posa(cancer,normal) " << cancer_pairs_posa << "," << normal_pairs_posa << " RX: " << supporting_posa << " R:" << cancer_pairs_posa/(0.001*cancer_pairs_posa+ normal_pairs_posa);
 				oss << " posb(cancer,normal) " << cancer_pairs_posb << "," << normal_pairs_posb << " RX: " << supporting_posb << " R:" << cancer_pairs_posb/(0.001*cancer_pairs_posb+ normal_pairs_posb) << endl;
 
@@ -989,7 +994,7 @@ vector<state> state::children() {
 		//
 		int type = fei.type;
 		int supporting = fei.supporting;
-		if (supporting==0) {
+		if (supporting<1e-15) {
 			cerr << "HUGE ERROR"  << fe.posa.chr << ":" << fe.posa.coord << " " << fe.posb.chr << ":" << fe.posb.coord << endl;	
 			exit(1);
 		}
@@ -1081,14 +1086,24 @@ int to_chr(const char * s) {
 }
 
 //read in the bp arcs
-void read_arcs(char * filename, bool normal) {
+unsigned long read_arcs(char * filename, bool normal) {
 	ifstream f (filename);
 	string chr_s;
 	unsigned int coord;
 	int arcs;
-	unsigned int total=0;
+	string line;
+	getline(f,line);
+	istringstream is(line);
+	unsigned long total=0;
+	is >> total;	
+	if (total<1000) {
+		cerr << "Warning probably read total wrong from arc links file!" << endl;
+		exit(1);
+	}
+
+	cerr << "Total at head of file is " << total << endl;
+	
 	while (f) {
-		string line;
 		getline(f,line);
 		istringstream is(line);
 		is >> chr_s >> coord >> arcs;
@@ -1096,13 +1111,13 @@ void read_arcs(char * filename, bool normal) {
 		
 		pos p = pos(chr,coord);
 		if (normal) {		 
-			normal_pair_coverage[p]=arcs;
+			normal_pair_coverage[p]=((double)arcs)/total;
 		} else {
-			cancer_pair_coverage[p]=arcs;
+			cancer_pair_coverage[p]=((double)arcs)/total;
 		}
-		total+=arcs;
+		//total+=arcs;
 	}
-
+	/*
 	set<pos>::iterator sit;
 	if (normal) {
 		for (map<pos,double>::iterator sit = normal_pair_coverage.begin(); sit!=normal_pair_coverage.end(); sit++) {
@@ -1115,21 +1130,20 @@ void read_arcs(char * filename, bool normal) {
 		}
 		total_cancer_pair_arcs=total;
 	}
-	
+	*/
 
 	cerr << "Read " << total << " arcs from " << filename << endl;
-
+	return total;
 }
 
 //read in the edges from clustering
-void read_links(char * filename) {
+void read_links(char * filename,unsigned long total_paired) {
 	ifstream f (filename);
 	//char chr[10]="";
 	unsigned int bpa,bpb,l_from,l_to,cluster_idx;
 	double avg_md;
 	string chra,chrb;
-	int type,total;
-	int total_links=0;
+	int type,total,total_links=0;
 	while (f) {
 		string line;
 		getline(f,line);
@@ -1161,7 +1175,7 @@ void read_links(char * filename) {
 
 		free_edges[posa].insert(posb);
 		edges[ea].type=type;
-		edges[ea].supporting=total;
+		edges[ea].supporting=((double)total)/total_paired;
 		edges[ea].bp=ea.length();
 
 		//add the other direction
@@ -1172,7 +1186,7 @@ void read_links(char * filename) {
 		}
 		free_edges[posb].insert(posa);
 		edges[eb].type=type;
-		edges[eb].supporting=total;
+		edges[eb].supporting=((double)total)/total_paired;
 		edges[eb].bp=eb.length();
 	}
 	cerr << "Read " << total_links << " links from " << filename << endl;	
@@ -1328,14 +1342,14 @@ int main(int argc, char ** argv) {
 	char * cov_normal_filename=argv[3];
 	char * pairs_cancer_filename=argv[4];
 	char * pairs_normal_filename=argv[5];
-	//read in the free edges
-	read_links(links_filename);
 
 	fake_edge=edge(pos(0,0),pos(0,0));
 
 	//read in the arc weights
-	read_arcs(pairs_normal_filename,true);	
-	read_arcs(pairs_cancer_filename,false);	
+	unsigned long total_normal_paired_mappings = read_arcs(pairs_normal_filename,true);	
+	unsigned long total_cancer_paired_mappings = read_arcs(pairs_cancer_filename,false);	
+	//read in the free edges
+	read_links(links_filename,total_cancer_paired_mappings);
 
 	cerr << "Slicing edges" << endl;
 	//cerr << "Slicing WARNING edges" << endl;
