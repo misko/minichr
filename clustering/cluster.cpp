@@ -22,6 +22,9 @@ using namespace std;
 #define WEIRD_STDDEV	4
 #define MAX_STDDEV	23
 
+#define MIN_SHARP	10
+#define SHARP_BP	15
+
 #define THREADS	6
 
 #define READ_SIZE	10000
@@ -59,34 +62,36 @@ double mean=0.0;
 double stddev=0.0;
 
 map< pos, map < pos, cluster > > clusters; 
-map< pos, multiset<pos> > sharps;
+map< pos, unsigned int > sharps;
 
 
 
-pos find_sharp(pos & p) {
-	pos x = pos(p.chr,MAX(stddev,p.coord)-stddev,true);
-	map<pos, multiset<pos> >::iterator low = sharps.lower_bound(x);
-	x = pos(p.chr,p.coord+stddev,true);
-	map<pos, multiset<pos> >::iterator high = sharps.upper_bound(x);
-	while (low!=high) {
-		//process for each 
-		const pos & z = low->first;
-		if (z.chr==p.chr) {
-			if (z.coord+stddev>=p.coord || z.coord<=p.coord+stddev) {
-				//ok its a  match!
-				return low->first;
+
+pos median_sharp(pos & p, bool * sharp) {
+	unsigned int total=0;
+	for (int i=-MIN(p.coord,SHARP_BP); i<SHARP_BP; i++) {
+		pos z = pos(p.chr, p.coord - i,p.strand);
+		total+=sharps[z];
+	}
+	if (total>10) {
+		unsigned int median=total/2;
+		total=0;
+		for (int i=-MIN(p.coord,SHARP_BP); i<SHARP_BP; i++) {
+			pos z = pos(p.chr, p.coord - i,p.strand);
+			total+=sharps[z];
+			if (total>=median) {
+				*sharp=true;
+				return z;
 			}
 		}
-
-		low++;		
 	}
-	
-	sharps[p].size();
+	*sharp=false;
 	return p;
 }
 
 void insert_sharp(pos & p) {
-	sharps[find_sharp(p)].insert(p);
+	//sharps[find_sharp(p)].insert(p);
+	sharps[p]++;
 }
 
 pos::pos(int chr, unsigned int coord, bool strand) {
@@ -496,12 +501,8 @@ int main(int argc, char ** argv) {
 			} else {
 				left_bound=set_min(c.lefts);
 			}
-			pos left_sharp = find_sharp(left_bound);
 			bool s_left=false;
-			if (sharps[left_sharp].size()>3) {
-				left_bound=set_median(sharps[left_sharp]);
-				s_left=true;
-			}
+			left_bound=median_sharp(left_bound,&s_left);
 
 			pos right_bound;
 			if (c.right_strand) {
@@ -509,12 +510,8 @@ int main(int argc, char ** argv) {
 			} else {
 				right_bound=set_min(c.rights);
 			}
-			pos right_sharp = find_sharp(right_bound);
 			bool s_right=false;
-			if (sharps[right_sharp].size()>3) {
-				right_bound=set_median(sharps[right_sharp]);
-				s_right=true;
-			}
+			right_bound=median_sharp(right_bound,&s_right);
 
 
 
@@ -524,37 +521,37 @@ int main(int argc, char ** argv) {
 				if (c.left_strand) {
 					cout << "0\t" << left_bound.chr << ":" << left_bound.coord << "\t";
 					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << "\t";
-					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t" << sharps[left_sharp].size() << "/" << sharps[right_sharp].size() << endl;
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << endl;
 	
 					cout << "1\t" << right_bound.chr << ":" << right_bound.coord << "\t";
 					cout << left_bound.chr << ":" << left_bound.coord << "\t" << c.lefts.size() << "\t";
-					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t" << sharps[left_sharp].size() << "/" << sharps[right_sharp].size() << endl;
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << endl;
 				} else {
 					cout << "1\t" << left_bound.chr << ":" << left_bound.coord << "\t";
 					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << "\t";
-					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t" << sharps[left_sharp].size() << "/" << sharps[right_sharp].size() << endl;
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << endl;
 	
 					cout << "0\t" << right_bound.chr << ":" << right_bound.coord << "\t";
 					cout << left_bound.chr << ":" << left_bound.coord  << "\t" << c.lefts.size() << "\t";
-					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t" << sharps[left_sharp].size() << "/" << sharps[right_sharp].size() << endl;
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << endl;
 				}
 			} else {
 				if (c.left_strand) {
 					cout << "2\t" << left_bound.chr << ":" << left_bound.coord << "\t";
 					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << "\t";
-					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t" << sharps[left_sharp].size() << "/" << sharps[right_sharp].size() << endl;
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << endl;
 	
 					cout << "2\t" << right_bound.chr << ":" << right_bound.coord << "\t";
 					cout << left_bound.chr << ":" << left_bound.coord << "\t" << c.lefts.size() << "\t";
-					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t" << sharps[left_sharp].size() << "/" << sharps[right_sharp].size() << endl;
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << endl;
 				} else {
 					cout << "3\t" << left_bound.chr << ":" << left_bound.coord << "\t";
 					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << "\t";
-					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t" << sharps[left_sharp].size() << "/" << sharps[right_sharp].size() << endl;
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << endl;
 
 					cout << "3\t" << right_bound.chr << ":" << right_bound.coord << "\t";
 					cout << left_bound.chr << ":" << left_bound.coord << "\t" << c.lefts.size() << "\t";
-					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t" << sharps[left_sharp].size() << "/" << sharps[right_sharp].size() << endl;
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << endl;
 				}
 
 			} 
