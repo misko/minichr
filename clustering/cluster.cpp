@@ -24,11 +24,13 @@ using namespace std;
 
 #define THREADS	6
 
-#define READ_SIZE	1000000
+#define READ_SIZE	10000
+
 
 class pos {
 	public:
 		bool marked;
+		bool sharp;
 		int chr;
 		unsigned int coord;
 		bool strand; // true is positive
@@ -57,12 +59,42 @@ double mean=0.0;
 double stddev=0.0;
 
 map< pos, map < pos, cluster > > clusters; 
+map< pos, multiset<pos> > sharps;
+
+
+
+pos find_sharp(pos & p) {
+	pos x = pos(p.chr,MAX(stddev,p.coord)-stddev,true);
+	map<pos, multiset<pos> >::iterator low = sharps.lower_bound(x);
+	x = pos(p.chr,p.coord+stddev,true);
+	map<pos, multiset<pos> >::iterator high = sharps.upper_bound(x);
+	while (low!=high) {
+		//process for each 
+		const pos & z = low->first;
+		if (z.chr==p.chr) {
+			if (z.coord+stddev>=p.coord || z.coord<=p.coord+stddev) {
+				//ok its a  match!
+				return low->first;
+			}
+		}
+
+		low++;		
+	}
+	
+	sharps[p].size();
+	return p;
+}
+
+void insert_sharp(pos & p) {
+	sharps[find_sharp(p)].insert(p);
+}
 
 pos::pos(int chr, unsigned int coord, bool strand) {
 	this->chr=chr;
 	this->coord=coord;
 	this->strand=strand;
 	this->marked=false;
+	this->sharp=false;
 }
 
 
@@ -119,7 +151,13 @@ bool pos::operator!=(const pos &other) const {
 
 }
 
-
+pos set_median(multiset<pos> s) {
+	multiset<pos>::iterator bit = s.begin();
+	for (unsigned int i=0; i<s.size()/2; i++) {
+		bit++;
+	}
+	return *bit;
+}
 
 pos set_max(multiset<pos> s) {
 	if (s.size()==0) {
@@ -156,7 +194,7 @@ pos set_min(multiset<pos> s) {
 }
 
 
-unsigned int cigar_len(const char * s) {
+unsigned int cigar_len(const char * s, bool * sharp) {
 	unsigned int len=0;
 	unsigned int xlen=0;
 	for (int i=0; i<strlen(s); i++) {
@@ -170,8 +208,9 @@ unsigned int cigar_len(const char * s) {
 				case 'D':
 					len+=xlen;
 					break;
-				case 'I':
 				case 'S':
+					*sharp=true;
+				case 'I':
 					break;
 				default:
 					cerr << "Failed to handle cigar op " << s[i] << endl;
@@ -197,6 +236,7 @@ void update_cluster(pos & a, pos & b) {
 		cerr << " Failed pre condition " << endl;
 		exit(1);
 	}
+
 
 	pos left_bound = pos(a.chr,MAX(stddev*MAX_STDDEV,a.coord)-stddev*MAX_STDDEV,true);
 	pos right_bound = pos(a.chr,a.coord+stddev*MAX_STDDEV,true);
@@ -297,50 +337,64 @@ void process_read(vector<string> & v_row) {
 	} else {
 		int flags = atoi(v_row[1].c_str());
 		//check if both are mapped
-		if ((flags & (UNMAPPED + M_UNMAPPED))==0) {
+		if ((flags & UNMAPPED)==0) {
 			string qname = v_row[0];
 			int my_chr = to_chr(v_row[2].c_str());
 			unsigned long my_pos = atol(v_row[3].c_str());
 			bool my_strand = ((flags & REVERSE)==0);
 
-			if (my_strand) {
-				string my_cigar = v_row[5];
-				my_pos+=cigar_len(my_cigar.c_str());
-			}
+			pos my =  pos(my_chr,my_pos,my_strand);
 
-			int mate_chr = my_chr;
-			if (v_row[6].c_str()[0]!='=') {
-				mate_chr = to_chr(v_row[6].c_str());	
-			}
-			unsigned long mate_pos = atol(v_row[7].c_str());
-			bool mate_strand = ((flags & M_REVERSE)==0);
-		
-			double isize=1000*mean; //TODO: HARD THRESHOLD
-			if (mate_chr==my_chr) {
-				isize=atof(v_row[8].c_str());
-				if (isize<0) {
-					isize=-isize;
+			my.marked=true;
+			string my_cigar = v_row[5];
+			unsigned int c_len=cigar_len(my_cigar.c_str(),&(my.sharp));
+			if (my.sharp) {
+				#pragma omp critical 
+				{
+					insert_sharp(my);
 				}
 			}
-
-			if (isize<(WEIRD_STDDEV*stddev+mean)) {
-				//this is kinda normal
-				return;
+			if (my_strand) {
+				my_pos+=c_len;
 			}
 
+			if ((flags & (UNMAPPED + M_UNMAPPED))==0) {
 
-			//cerr << my_chr << ":" << my_pos << " " << mate_chr << ":" << mate_pos << endl;
-
-			pos my =  pos(my_chr,my_pos,my_strand);
-			my.marked=true;
-			pos mate = pos(mate_chr,mate_pos,mate_strand);
-
-
-			#pragma omp critical 
-			{
-				update_cluster(my,mate);
-			}	
+				int mate_chr = my_chr;
+				if (v_row[6].c_str()[0]!='=') {
+					mate_chr = to_chr(v_row[6].c_str());	
+				}
+				unsigned long mate_pos = atol(v_row[7].c_str());
+				bool mate_strand = ((flags & M_REVERSE)==0);
 			
+				double isize=1000*(stddev+mean+10); //TODO: HARD THRESHOLD
+				if (mate_chr==my_chr) {
+					isize=atof(v_row[8].c_str());
+					if (isize<0) {
+						isize=-isize;
+					}
+				}
+
+				if (isize<(WEIRD_STDDEV*stddev+mean)) {
+					//this is kinda normal
+					return;
+				}
+
+
+				//cerr << my_chr << ":" << my_pos << " " << mate_chr << ":" << mate_pos << endl;
+
+				pos mate = pos(mate_chr,mate_pos,mate_strand);
+
+
+				#pragma omp critical 
+				{
+					update_cluster(my,mate);
+				}	
+				
+				
+			} else {
+
+			}
 			
 		}
 	}
@@ -415,10 +469,10 @@ int main(int argc, char ** argv) {
 						v_row.push_back(field);
 					}
 					process_read(v_row);
+					
 				}
 			}
 		}
-	
 		if (read!=READ_SIZE) {
 			break;
 		}
@@ -431,21 +485,37 @@ int main(int argc, char ** argv) {
 		for (map<pos,cluster>::iterator xit=clusters[it->first].begin(); xit!=clusters[it->first].end(); xit++) {
 			pos posb = xit->first;
 			cluster c = clusters[posa][posb];
-			if (c.lefts.size()==0 || c.rights.size()==0) {
+			if ( c.lefts.size()==0 || c.rights.size()==0) {
 				continue;
 			}
+
+		
 			pos left_bound;
 			if (c.left_strand) {
 				left_bound=set_max(c.lefts);
 			} else {
 				left_bound=set_min(c.lefts);
 			}
+			pos left_sharp = find_sharp(left_bound);
+			bool s_left=false;
+			if (sharps[left_sharp].size()>3) {
+				left_bound=set_median(sharps[left_sharp]);
+				s_left=true;
+			}
+
 			pos right_bound;
 			if (c.right_strand) {
 				right_bound=set_max(c.rights);
 			} else {
 				right_bound=set_min(c.rights);
 			}
+			pos right_sharp = find_sharp(right_bound);
+			bool s_right=false;
+			if (sharps[right_sharp].size()>3) {
+				right_bound=set_median(sharps[right_sharp]);
+				s_right=true;
+			}
+
 
 
 			//get the type
@@ -453,33 +523,43 @@ int main(int argc, char ** argv) {
 			if (c.left_strand == !c.right_strand) {
 				if (c.left_strand) {
 					cout << "0\t" << left_bound.chr << ":" << left_bound.coord << "\t";
-					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << endl;
+					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << "\t";
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t" << sharps[left_sharp].size() << "/" << sharps[right_sharp].size() << endl;
 	
 					cout << "1\t" << right_bound.chr << ":" << right_bound.coord << "\t";
-					cout << left_bound.chr << ":" << left_bound.coord << "\t" << c.lefts.size() << endl;
+					cout << left_bound.chr << ":" << left_bound.coord << "\t" << c.lefts.size() << "\t";
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t" << sharps[left_sharp].size() << "/" << sharps[right_sharp].size() << endl;
 				} else {
 					cout << "1\t" << left_bound.chr << ":" << left_bound.coord << "\t";
-					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << endl;
+					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << "\t";
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t" << sharps[left_sharp].size() << "/" << sharps[right_sharp].size() << endl;
 	
 					cout << "0\t" << right_bound.chr << ":" << right_bound.coord << "\t";
-					cout << left_bound.chr << ":" << left_bound.coord  << "\t" << c.lefts.size() << endl;
+					cout << left_bound.chr << ":" << left_bound.coord  << "\t" << c.lefts.size() << "\t";
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t" << sharps[left_sharp].size() << "/" << sharps[right_sharp].size() << endl;
 				}
 			} else {
 				if (c.left_strand) {
 					cout << "2\t" << left_bound.chr << ":" << left_bound.coord << "\t";
-					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << endl;
+					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << "\t";
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t" << sharps[left_sharp].size() << "/" << sharps[right_sharp].size() << endl;
 	
 					cout << "2\t" << right_bound.chr << ":" << right_bound.coord << "\t";
-					cout << left_bound.chr << ":" << left_bound.coord << "\t" << c.lefts.size() << endl;
+					cout << left_bound.chr << ":" << left_bound.coord << "\t" << c.lefts.size() << "\t";
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t" << sharps[left_sharp].size() << "/" << sharps[right_sharp].size() << endl;
 				} else {
 					cout << "3\t" << left_bound.chr << ":" << left_bound.coord << "\t";
-					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << endl;
+					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << "\t";
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t" << sharps[left_sharp].size() << "/" << sharps[right_sharp].size() << endl;
 
 					cout << "3\t" << right_bound.chr << ":" << right_bound.coord << "\t";
-					cout << left_bound.chr << ":" << left_bound.coord << "\t" << c.lefts.size() << endl;
+					cout << left_bound.chr << ":" << left_bound.coord << "\t" << c.lefts.size() << "\t";
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t" << sharps[left_sharp].size() << "/" << sharps[right_sharp].size() << endl;
 				}
 
 			} 
+
+			
 		}
 	}
 	
