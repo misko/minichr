@@ -15,11 +15,15 @@
 
 #define THREADS	32
 
-#define MIN_FLOW 4
-#define MAX_FLOW 20
-#define MAX_FREE 20
 
-#define ZERO 1e-5
+
+#define MIN_FLOW 3
+#define MAX_FLOW 20
+#define MAX_FREE 70
+
+
+
+#define ZERO 1e-7
 
 
 #define MAX_EDGE_SIZE 2400
@@ -128,6 +132,7 @@ class state_hash {
 		unsigned int first_coord; 	
 		double score;
 		int cp;
+		size_t edges,free_edges;
 		double ncov,ccov,pcov;
 		state_hash(state s) {
 			last_coord = first_coord =0;
@@ -136,6 +141,8 @@ class state_hash {
 				first_coord = s.gpath_vector.front().posa.coord;
 			}
 			
+			edges=s.gpath_vector.size();
+			free_edges=s.fpath_set.size();
 			score=s.score;
 			cp=s.cp;
 			ncov=s.ncov;
@@ -516,7 +523,16 @@ unsigned int state::arc_edge_bound(edge & prev, edge & curr) {
 			size_t count = MIN(gpath_set.count(prev)+gpath_set.count(prev.reverse()),gpath_set.count(curr)+gpath_set.count(curr.reverse())); //TODO just an estimate
 			double normal_pairs = re_normal_pair_coverage(prev.posb);
 			double cancer_pairs = re_cancer_pair_coverage(prev.posb);
-			unsigned int bound = ceil(cancer_pairs/(cancer_pairs*0.001+normal_pairs))+2;
+			unsigned int bound = ceil(cancer_pairs/(cancer_pairs*0.001+normal_pairs));
+			double next_ratio = segment_cov_ratio(prev.posb,true);
+			double prev_ratio = segment_cov_ratio(prev.posb,false);
+			if (curr.is_forward() && prev_ratio>next_ratio) {
+				bound++;
+				return MAX_FLOW;
+			} else if (!curr.is_forward() && next_ratio>prev_ratio) {
+				bound++;
+				return MAX_FLOW;
+			} 
 			return bound/count + (bound%count!=0 ? 1 : 0 ); //TODO smoothing estimate
 		} else {
 			return MAX_FLOW;
@@ -528,9 +544,9 @@ unsigned int state::arc_edge_bound(edge & prev, edge & curr) {
 		edge e = edge(prev.posb,curr.posa);
 		edge_info ei = re_edges(e);
 		double supporting = ei.supporting;
-		unsigned int supporting_bound = 2+ceil(supporting/(0.001*supporting + 0.5*normal_pairs_prev + 0.5*normal_pairs_curr));
-		unsigned int posa_bound = 2+bound_pos(prev.posb);
-		unsigned int posb_bound = 2+bound_pos(curr.posa);
+		unsigned int supporting_bound = ceil(supporting/(0.001*supporting + 0.5*normal_pairs_prev + 0.5*normal_pairs_curr));
+		unsigned int posa_bound = bound_pos(prev.posb);
+		unsigned int posb_bound = bound_pos(curr.posa);
 		unsigned int bound=MAX(MAX(posa_bound,posb_bound),supporting_bound);
 		size_t count = fpath_set.count(e) + fpath_set.count(e.reverse());
 		return bound/count + (bound%count!=0 ? 1 : 0);
@@ -555,7 +571,7 @@ void state::best_score(bool just_last) {
 	//find the best score and cp
 	double best_score=0;
 	int best_flow=-1;
-	for (unsigned int i=MIN_FLOW; i<max_flow; i++) {
+	for (unsigned int i=MIN_FLOW; i<=max_flow; i++) {
 		score=score_with_flow(i);
 		if (best_flow==-1 || best_score<score) {
 			best_flow=i;
@@ -570,14 +586,14 @@ void state::best_score(bool just_last) {
 state::state() {
 	//make sure some variables are set up
 	scores.resize(MAX_FLOW,0.0);
-	max_flow=MAX_FLOW;
+	max_flow=MAX_FLOW-1;
 	ncov=0; ccov=0; pcov=0; score=0; cp=0; 
 	bp_check=false;
 }
 
 state::state(edge e) {
 	scores.resize(MAX_FLOW,0.0);
-	max_flow=MAX_FLOW;
+	max_flow=MAX_FLOW-1;
 	ncov=0; ccov=0; pcov=0; score=0; cp=0; 	
 	
 	//add in the edge
@@ -591,7 +607,7 @@ state::state(edge e) {
 
 state::state(vector<edge> ve) {
 	scores.resize(MAX_FLOW,0.0);
-	max_flow=MAX_FLOW;
+	max_flow=MAX_FLOW-1;
 	ncov=0; ccov=0; pcov=0; score=0; cp=0; 	
 
 	//add in all the edges
@@ -621,6 +637,7 @@ state::state(state s, edge e) {
 
 
 bool state::is_dup() {
+	return false;
 	if (gpath_vector.size()==0) {
 		return true;
 	}
@@ -786,19 +803,20 @@ string state::str() {
 				double supporting = ei.supporting;
 				double supporting_posa = ceil((supporting/(0.001*supporting + normal_pairs_posa)));
 				double supporting_posb = ceil((supporting/(0.001*supporting + normal_pairs_posb)));
-				double supporting_bound = 2+ceil(supporting/(0.001*supporting + 0.5*normal_pairs_posa + 0.5*normal_pairs_posb));
+				double supporting_bound = ceil(supporting/(0.001*supporting + 0.5*normal_pairs_posa + 0.5*normal_pairs_posb));
 				//max_flow=MIN(3*MAX(supporting_posa,supporting_posb),max_flow);
 				oss << " SUP: " << supporting_bound ;
 				oss << " posa(cancer,normal) " << cancer_pairs_posa << "," << normal_pairs_posa << " RX: " << supporting_posa << " R:" << cancer_pairs_posa/(0.001*cancer_pairs_posa+ normal_pairs_posa);
 				oss << " posb(cancer,normal) " << cancer_pairs_posb << "," << normal_pairs_posb << " RX: " << supporting_posb << " R:" << cancer_pairs_posb/(0.001*cancer_pairs_posb+ normal_pairs_posb) << endl;
 
+				
 				//print also the next edge
 				double next_ccov=0.0;
 				double next_ncov=0.0;
 				unsigned int bp=0;
-				set<pos>::iterator sit = bps.find(last.posb);
+				set<pos>::iterator sit = bps.find(e.posb);
 				if (last.is_forward()) {
-					pos previous = last.posb;
+					pos previous = e.posb;
 					while (sit!=bps.end() && bp<MAX_EDGE_SIZE) {
 						sit++;
 						pos p = *sit;
@@ -813,7 +831,7 @@ string state::str() {
 						}
 					}
 				} else {
-					pos previous = last.posb;
+					pos previous = e.posb;
 					while (sit!=bps.begin() && bp<MAX_EDGE_SIZE) {
 						sit--;
 						pos p = *sit;
@@ -830,7 +848,6 @@ string state::str() {
 				}
 				oss << "\t\tncov: " << next_ncov << " ccov: " << next_ccov << " length: " << bp <<  endl;
 				
-				
 
 				start=e;
 				last=e;
@@ -840,9 +857,46 @@ string state::str() {
 			}
 		}
 		edge e = gpath_vector.back();
+				//print also the next edge
+				double next_ccov=0.0;
+				double next_ncov=0.0;
+				unsigned int bp=0;
+				set<pos>::iterator sit = bps.find(e.posb);
+				if (last.is_forward()) {
+					pos previous = e.posb;
+					while (sit!=bps.end() && bp<MAX_EDGE_SIZE) {
+						sit++;
+						pos p = *sit;
+						edge e = edge(previous,p);
+						bp+=e.length();
+						edge_info ei = re_edges(e);
+						next_ccov += ei.cancer_coverage;
+						next_ncov += ei.normal_coverage;
+						previous=*sit;
+						if (re_free_edges(p).size()>0) {
+							break;
+						}
+					}
+				} else {
+					pos previous = e.posb;
+					while (sit!=bps.begin() && bp<MAX_EDGE_SIZE) {
+						sit--;
+						pos p = *sit;
+						edge e = edge(previous,p);
+						bp+=e.length();
+						edge_info ei = re_edges(e);
+						next_ccov += ei.cancer_coverage;
+						next_ncov += ei.normal_coverage;
+						previous=*sit;
+						if (re_free_edges(p).size()>0) {
+							break;
+						}
+					}
+				}
 		oss << "\t" << start.posa.chr << ":" << start.posa.coord << " ~ " << last.posb.chr << ":" << last.posb.coord  << " [ " << len << " ] ";
 		oss << " ncov: " << nc << " ccov: " << cc  << (start.posa<last.posb ? "\t+" : "\t-" )  << endl;
 		oss << "\t\t" << e.posa.chr << ":" << e.posa.coord << " ~ " << e.posb.chr << ":" << e.posb.coord  << " [ " << "?" << " ] ";
+				oss << "\t\tncov: " << next_ncov << " ccov: " << next_ccov << " length: " << bp <<  endl;
 		oss << " ncov: " << re_edges(e).normal_coverage << " ccov: " << re_edges(e).cancer_coverage  << (start.posa<last.posb ? "\t+" : "\t-" )  << endl;
 	}
 	
@@ -938,20 +992,26 @@ vector<state> state::children() {
 	for (set<pos>::iterator sit = free_edges[last_pos].begin(); sit!=free_edges[last_pos].end(); sit++) {
 		edge fe = edge(last_pos,*sit);
 		#ifndef MULTI_FREE_EDGE
-		if (fpath_set.find(fe)!=fpath_set.end() || fpath_set.find(fe.reverse())!=fpath_set.end() || fpath_set.size()==MAX_FREE) {
+		if (fpath_set.find(fe)!=fpath_set.end() || fpath_set.find(fe.reverse())!=fpath_set.end()) {
 			//already used this free edge
 			continue;
 		}
+		
 		#endif
+
+		if (fpath_set.size()>MAX_FREE) {
+			continue;
+		}
+
 		edge_info fei = re_edges(fe);
 		//can enter the edge?
 		//
 		int type = fei.type;
 		double supporting = fei.supporting;
-		if (supporting<1e-15) {
+		/*if (supporting<1e-15) {
 			cerr << "HUGE ERROR"  << fe.posa.chr << ":" << fe.posa.coord << " " << fe.posb.chr << ":" << fe.posb.coord << endl;	
 			exit(1);
-		}
+		}*/
 		set<pos>::iterator ssit;
 
 		edge to_add = fake_edge;
@@ -1489,6 +1549,14 @@ int main(int argc, char ** argv) {
 
 				for (unsigned int i=0; i<children.size(); i++) {
 					state c = children[i];
+
+
+					/*edge e = c.gpath_vector.back();
+					edge s = c.gpath_vector.front();
+					if (s.posa.chr!=2 || s.posa.coord!=8864653) {
+						continue;
+					}*/
+
 					if (c.score>ZERO && c.go_on()) {
 						//cout << "CHILD" << endl << c.str() << endl;
 						pq.push(c);
@@ -1524,12 +1592,12 @@ int main(int argc, char ** argv) {
 			//fix up the coverage
 			edge e = best_state.gpath_vector[i];
 			edge_info ei = re_edges(e);
-			ei.cancer_coverage -= ei.normal_coverage*best_state.cp;	
+			ei.cancer_coverage -= MAX(0,ei.normal_coverage*best_state.cp);	
 			edges[e]=ei;
 		
 			edge er = e.reverse();
 			edge_info eri = re_edges(er);
-			eri.cancer_coverage -= eri.normal_coverage*best_state.cp;			
+			eri.cancer_coverage -= MAX(0,eri.normal_coverage*best_state.cp);			
 			edges[er]=eri;
 
 			//fix up the supporting arcs
@@ -1547,7 +1615,7 @@ int main(int argc, char ** argv) {
 					double na = normal_pair_coverage[prev.posb];
 					double nb = normal_pair_coverage[curr.posa];
 
-					edge e = best_state.gpath_vector[i];
+					edge e = edge(prev.posb,curr.posa);
 					edge_info ei = re_edges(e);
 					ei.supporting=MAX(0,ei.supporting-(0.5*na+0.5*nb)*best_state.cp);
 					edges[e]=ei;
@@ -1570,7 +1638,7 @@ int main(int argc, char ** argv) {
 			
 		//lest find out which ones we need to rerun	
 		skip_edges.clear();
-		#pragma omp parallel for schedule(dynamic,1)
+		/*#pragma omp parallel for schedule(dynamic,1)
 		for (unsigned int i=0; i<start_edges.size(); i++) {
 			edge e = start_edges[i];
 			state edge_best;
@@ -1599,7 +1667,7 @@ int main(int argc, char ** argv) {
 					skip_edges.insert(e);	
 				}
 			}	
-		}
+		}*/
 	} while (best_state.score>ZERO);
 	cerr << "CLEAN" << endl;	
 	return 0;
