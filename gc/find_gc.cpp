@@ -376,7 +376,7 @@ int main(int argc, char ** argv) {
 	
 
 	//print out gc matrix
-	cout << "SIZE\t";
+	/*cout << "SIZE\t";
 	for (int j=0; j*GC_RES<=max_size; j++) {
 		cout << j*GC_RES << "\t" ;
 	}
@@ -392,7 +392,7 @@ int main(int argc, char ** argv) {
 		}
 	}
 
-	cout << endl << endl;
+	cout << endl << endl;*/
 
 
 	//print out fractions	
