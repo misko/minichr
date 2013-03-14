@@ -71,17 +71,21 @@ pos median_sharp(pos & p, bool * sharp) {
 	unsigned int total=0;
 	for (int i=-MIN(p.coord,SHARP_BP); i<SHARP_BP; i++) {
 		pos z = pos(p.chr, p.coord - i,p.strand);
-		total+=sharps[z];
+		if (sharps.find(z)!=sharps.end()) {
+			total+=sharps[z];
+		}
 	}
 	if (total>10) {
 		unsigned int median=total/2;
 		total=0;
 		for (int i=-MIN(p.coord,SHARP_BP); i<SHARP_BP; i++) {
 			pos z = pos(p.chr, p.coord - i,p.strand);
-			total+=sharps[z];
-			if (total>=median) {
-				*sharp=true;
-				return z;
+			if (sharps.find(z)!=sharps.end()) {
+				total+=sharps[z];
+				if (total>=median) {
+					*sharp=true;
+					return z;
+				}
 			}
 		}
 	}
@@ -525,7 +529,7 @@ int main(int argc, char ** argv) {
 	
 					cout << "1\t" << right_bound.chr << ":" << right_bound.coord << "\t";
 					cout << left_bound.chr << ":" << left_bound.coord << "\t" << c.lefts.size() << "\t";
-					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << endl;
+					cout << (s_right ? "*" : "-" ) << "/" << (s_left ? "*" : "-" ) << endl;
 				} else {
 					cout << "1\t" << left_bound.chr << ":" << left_bound.coord << "\t";
 					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << "\t";
@@ -533,7 +537,7 @@ int main(int argc, char ** argv) {
 	
 					cout << "0\t" << right_bound.chr << ":" << right_bound.coord << "\t";
 					cout << left_bound.chr << ":" << left_bound.coord  << "\t" << c.lefts.size() << "\t";
-					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << endl;
+					cout << (s_right ? "*" : "-" ) << "/" << (s_left ? "*" : "-" ) << endl;
 				}
 			} else {
 				if (c.left_strand) {
@@ -543,7 +547,7 @@ int main(int argc, char ** argv) {
 	
 					cout << "2\t" << right_bound.chr << ":" << right_bound.coord << "\t";
 					cout << left_bound.chr << ":" << left_bound.coord << "\t" << c.lefts.size() << "\t";
-					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << endl;
+					cout << (s_right ? "*" : "-" ) << "/" << (s_left ? "*" : "-" ) << endl;
 				} else {
 					cout << "3\t" << left_bound.chr << ":" << left_bound.coord << "\t";
 					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << "\t";
@@ -551,7 +555,7 @@ int main(int argc, char ** argv) {
 
 					cout << "3\t" << right_bound.chr << ":" << right_bound.coord << "\t";
 					cout << left_bound.chr << ":" << left_bound.coord << "\t" << c.lefts.size() << "\t";
-					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << endl;
+					cout << (s_right ? "*" : "-" ) << "/" << (s_left ? "*" : "-" ) << endl;
 				}
 
 			} 
