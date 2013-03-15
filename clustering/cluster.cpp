@@ -357,14 +357,14 @@ void process_read(vector<string> & v_row) {
 			my.marked=true;
 			string my_cigar = v_row[5];
 			unsigned int c_len=cigar_len(my_cigar.c_str(),&(my.sharp));
+			if (my_strand) {
+				my.coord+=c_len;
+			}
 			if (my.sharp) {
 				#pragma omp critical 
 				{
 					insert_sharp(my);
 				}
-			}
-			if (my_strand) {
-				my_pos+=c_len;
 			}
 
 			if ((flags & (UNMAPPED + M_UNMAPPED))==0) {
