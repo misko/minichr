@@ -356,7 +356,7 @@ int main(int argc, char ** argv) {
 						unsigned int center = left.coord + isize/2;
 						pos xleft = pos(left.chr, MAX(200,center)-200, left.strand); 
 						pos xright = pos(right.chr, center+200, right.strand); 
-						int gc = get_gc(left,right);
+						int gc = get_gc(xleft,xright);
 						gcs[400][gc]++;
 						total++;
 						size_totals[400]++; 
