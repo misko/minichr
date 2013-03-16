@@ -95,6 +95,7 @@ pos median_sharp(pos & p, bool * sharp) {
 
 void insert_sharp(pos & p) {
 	//sharps[find_sharp(p)].insert(p);
+	//cerr << "SHARP " << p.chr << ":" << p.coord << endl;
 	sharps[p]++;
 }
 
@@ -357,15 +358,6 @@ void process_read(vector<string> & v_row) {
 			my.marked=true;
 			string my_cigar = v_row[5];
 			unsigned int c_len=cigar_len(my_cigar.c_str(),&(my.sharp));
-			if (my_strand) {
-				my.coord+=c_len;
-			}
-			if (my.sharp) {
-				#pragma omp critical 
-				{
-					insert_sharp(my);
-				}
-			}
 
 			if ((flags & (UNMAPPED + M_UNMAPPED))==0) {
 
@@ -386,9 +378,30 @@ void process_read(vector<string> & v_row) {
 
 				if (isize<(WEIRD_STDDEV*stddev+mean)) {
 					//this is kinda normal
+					if (my.sharp) {
+						if (!my.strand) {
+							my.coord+=c_len;
+						}
+						#pragma omp critical 
+						{
+							insert_sharp(my);
+						}
+					}
+					
 					return;
 				}
 
+
+				if (my.strand) {
+					my.coord+=c_len;
+					if (my.sharp) {
+						#pragma omp critical 
+						{
+							insert_sharp(my);
+						}
+
+					}					
+				}
 
 				//cerr << my_chr << ":" << my_pos << " " << mate_chr << ":" << mate_pos << endl;
 
