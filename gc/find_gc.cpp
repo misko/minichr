@@ -193,7 +193,7 @@ void read_ref(char * filename) {
 				memcpy(ref_chr,buffer,length);
 				ref[chr-1]=ref_chr;
 				ref_sizes[chr-1]=length;
-				cerr << chr << endl;
+				//cerr << chr << endl;
 			}
 			//setup the new
 			length=0;	
@@ -225,7 +225,7 @@ void read_ref(char * filename) {
 		memcpy(ref_chr,buffer,length);
 		ref[chr-1]=ref_chr;
 		ref_sizes[chr-1]=length;
-		cerr << chr << endl;
+		//cerr << chr << endl;
 	}
 
 }

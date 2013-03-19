@@ -547,7 +547,7 @@ unsigned int state::arc_edge_bound(edge & prev, edge & curr) {
 		unsigned int supporting_bound = ceil(supporting/(0.001*supporting + 0.5*normal_pairs_prev + 0.5*normal_pairs_curr));
 		unsigned int posa_bound = bound_pos(prev.posb);
 		unsigned int posb_bound = bound_pos(curr.posa);
-		unsigned int bound=MAX(MAX(posa_bound,posb_bound),supporting_bound);
+		unsigned int bound=1+MAX(MAX(posa_bound,posb_bound),supporting_bound);
 		size_t count = fpath_set.count(e) + fpath_set.count(e.reverse());
 		return bound/count + (bound%count!=0 ? 1 : 0);
 	}
