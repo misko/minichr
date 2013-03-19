@@ -5,3 +5,12 @@ zcat clusters_mq10_s10_v2.gz  | sed 's/\([0-9]\)\t\([0-9]*\)[:]\([0-9]*\)\t\([0-
 sed 's/\([0-9]\)\t\([0-9]*\)[:]\([0-9]*\)\t\([0-9]*\)[:]\([0-9]*\)\t\([0-9]*\)\t\(.*\)/\2\t\3\t\4\t\5\t\1\t\6/g' | awk '{if ($1==23) {$1="X"}; if ($1==24) {$1="Y"}; if ($3==23) {$3="X"}; if ($3==24) {$3="Y"}; a="+"; b="+"; if ($5==1) {a="-"; b="-"}; if ($5==2) {a="+"; b="-"}; if ($5==3) {a="-"; b="+"}; print "chr"$1"\t"$2"\t"a"\tchr"$3"\t"$4"\t"b}'
 
 sed 's/\([0-9]\)\t\([0-9]*\)[:]\([0-9]*\)\t\([0-9]*\)[:]\([0-9]*\)\t\([0-9]*\)\t\(.*\)/\2\t\3\t\4\t\5\t\1\t\6/g' | awk '{if ($1==23) {$1="X"}; if ($1==24) {$1="Y"}; if ($3==23) {$3="X"}; if ($3==24) {$3="Y"}; a="+"; b="+"; if ($5==1) {a="-"; b="-"}; if ($5==2) {a="+"; b="-"}; if ($5==3) {a="-"; b="+"}; print "chr"$1"\t"$2"\t"a"\tchr"$3"\t"$4"\t"b"\t"$6}'
+
+
+python2.6 overlap.py 1000 /tmp/n.gz /tmp/t.gz  > /tmp/out
+
+cat /tmp/out | awk '{if (NF>4) {print $0}}' | awk '{print $1"\t"$2"\t"$2+1"\t"$3"\t"$4"\t"$5"\t"$6"\t"$7}'  | /hpf/largeprojects/ccm/amorrison/DIPG_WGS/junk/bedtools-2.17.0/bin/intersectBed -a - -b /hpf/largeprojects/ccm/amorrison/DIPG_WGS/scripts/centromeres_merged -v | awk '{print $5"\t"$6"\t"$6+1"\t"$7"\t"$1"\t"$2"\t"$4"\t"$8}' | /hpf/largeprojects/ccm/amorrison/DIPG_WGS/junk/bedtools-2.17.0/bin/intersectBed -a - -b /hpf/largeprojects/ccm/amorrison/DIPG_WGS/scripts/centromeres_merged -v |  | awk '{print $5"\t"$6"\t"$7"\t"$1"\t"$2"\t"$4"\t"$8}' > filtered_greedy.txt
+cat filtered_greedy.txt  | grep chr  | awk '{print $1"\t"$2"\t"$3; print $4"\t"$5"\t"$6; }' | sort | uniq  | awk '{if ($3=="-") {print $1"\t"$2"\t"($2+1000);} else {print $1"\t"($2-1000)"\t"$2;}}'  > dipg29t_removed1000n_nocentro_intervals.txt
+while read line ; do echo $line 1>&2 ; ~/samtools view ../merged.sorted.bam `echo $line | sed 's/\(chr\S*\)\s*\([0-9]*\)\s*\([0-9]*\)/\1:\2-\3/g'`; done < dipg29t_removed1000n_nocentro_intervals.txt | sort -S 5g | uniq > uniq.sam
+
+
