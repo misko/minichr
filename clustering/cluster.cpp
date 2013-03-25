@@ -234,7 +234,7 @@ unsigned int cigar_len(const char * s, bool * sharp) {
 }
 
 
-void update_cluster(pos & a, pos & b) {
+void update_cluster(pos a, pos b) {
 
 	if (a>b) {
 		pos t = a;

@@ -125,7 +125,15 @@ cread::cread(string name , int id, pos inside, int cid) {
 
 string pos::str() {
 	char buffer[5000];
-	sprintf(buffer,"%d:%u%c" , chr,coord, strand ? '+' : '-');
+	char cchr[10];
+	if (chr==23) {
+		cchr[0]='X'; cchr[1]='\0';
+	} else if (chr==24) {
+		cchr[0]='Y'; cchr[1]='\0';
+	} else {
+		sprintf(cchr,"%d",chr);
+	}
+	sprintf(buffer,"chr%s:%u%c" , cchr,coord, strand ? '+' : '-');
 	return string(buffer);
 }
 bool pos::operator<(const pos &other) const {
