@@ -278,11 +278,13 @@ void read_bps(char * bps_filename) {
 	char const field_delim = '\t';
 	ifstream input( bps_filename );
 	for (string row; getline(input, row, row_delim); ) {
-		int chr ;
+		string schr ;
+		int chr;
 		unsigned int coord;
 		istringstream ss(row);
-		ss >> chr >> coord; 
-		//cerr << chr << " " << chr << " " << coord << endl;	
+		ss >> schr >> coord; 
+		//cerr << schr << " " << chr << " " << coord << endl;
+		chr=to_chr(schr.c_str());	
 		pos p = pos(chr,coord,true);
 		bps[p]=bp();
 	}
@@ -366,7 +368,15 @@ int main(int argc, char ** argv) {
 
 
 	for (map<pos,bp>::iterator it=bps.begin(); it!=bps.end() ; it++) {
-		cout << it->first.chr << "\t" << it->first.coord << "\t" << MAX(it->second.lefts,it->second.rights) << endl;		
+		char buffer[10]; 
+		if (it->first.chr==23) {
+			buffer[0]='X'; buffer[1]='\0';
+		} else if (it->first.chr==24) {
+			buffer[0]='Y'; buffer[1]='\0';
+		} else {
+			sprintf(buffer, "%d",it->first.chr);
+		}
+		cout << "chr" << buffer << "\t" << it->first.coord << "\t" << MAX(it->second.lefts,it->second.rights) << endl;		
 	}	
 
 	return 0;	
