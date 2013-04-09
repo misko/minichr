@@ -9,8 +9,16 @@ sed 's/\([0-9]\)\t\([0-9]*\)[:]\([0-9]*\)\t\([0-9]*\)[:]\([0-9]*\)\t\([0-9]*\)\t
 
 python2.6 overlap.py 1000 /tmp/n.gz /tmp/t.gz  > /tmp/out
 
-cat /tmp/out | awk '{if (NF>4) {print $0}}' | awk '{print $1"\t"$2"\t"$2+1"\t"$3"\t"$4"\t"$5"\t"$6"\t"$7}'  | /hpf/largeprojects/ccm/amorrison/DIPG_WGS/junk/bedtools-2.17.0/bin/intersectBed -a - -b /hpf/largeprojects/ccm/amorrison/DIPG_WGS/scripts/centromeres_merged -v | awk '{print $5"\t"$6"\t"$6+1"\t"$7"\t"$1"\t"$2"\t"$4"\t"$8}' | /hpf/largeprojects/ccm/amorrison/DIPG_WGS/junk/bedtools-2.17.0/bin/intersectBed -a - -b /hpf/largeprojects/ccm/amorrison/DIPG_WGS/scripts/centromeres_merged -v |  | awk '{print $5"\t"$6"\t"$7"\t"$1"\t"$2"\t"$4"\t"$8}' > filtered_greedy.txt
+cat /tmp/out | awk '{if (NF>4) {print $0}}' | awk '{print $1"\t"$2"\t"$2+1"\t"$3"\t"$4"\t"$5"\t"$6"\t"$7}'  | /hpf/largeprojects/ccm/amorrison/DIPG_WGS/junk/bedtools-2.17.0/bin/intersectBed -a - -b /hpf/largeprojects/ccm/amorrison/DIPG_WGS/scripts/centromeres_merged -v | awk '{print $5"\t"$6"\t"$6+1"\t"$7"\t"$1"\t"$2"\t"$4"\t"$8}' | /hpf/largeprojects/ccm/amorrison/DIPG_WGS/junk/bedtools-2.17.0/bin/intersectBed -a - -b /hpf/largeprojects/ccm/amorrison/DIPG_WGS/scripts/centromeres_merged -v  | awk '{print $5"\t"$6"\t"$7"\t"$1"\t"$2"\t"$4"\t"$8}' > filtered_greedy.txt
 cat filtered_greedy.txt  | grep chr  | awk '{print $1"\t"$2"\t"$3; print $4"\t"$5"\t"$6; }' | sort | uniq  | awk '{if ($3=="-") {print $1"\t"$2"\t"($2+1000);} else {print $1"\t"($2-1000)"\t"$2;}}'  > dipg29t_removed1000n_nocentro_intervals.txt
 while read line ; do echo $line 1>&2 ; ~/samtools view ../merged.sorted.bam `echo $line | sed 's/\(chr\S*\)\s*\([0-9]*\)\s*\([0-9]*\)/\1:\2-\3/g'`; done < dipg29t_removed1000n_nocentro_intervals.txt | sort -S 5g | uniq > uniq.sam
 
+cat dipg29t/n3t10_nocentro_bigger1000  | sort -k 7,7n | sed 's/chr/hs/g' | awk '{print $1"\t"$2-100"\t"$2+100"\t"$4"\t"$5-100"\t"$5+100}' > dipg29t/n3t10_nocentro_bigger1000_circos
 
+cat dipg29t/n3t10_nocentro_refined_arc_bounded | sort -k 7,7n | sed 's/chr/hs/g' | awk '{t=$7/2; if (t<2) {t=2}; if ($t>=2) {print $1"\t"$2-100"\t"$2+100"\t"$4"\t"$5-100"\t"$5+100"\tthickness="t}}' > dipg29t/n3t10_nocentro_bigger1000_circos
+
+
+cat dipg29t/n3t10_nocentro_refined_arc_bounded | head -n 2 | awk '{x=$3; y=$6; if (x=="+") {if (y=="+") {t=0} else {t=2}} else {if (y=="-") {t=1} else {t=3}}; OFS="\t"; print $1,$2,$5,t,$7,0,0,0.0,0,$4,"EDGE"}'
+
+
+cat  /dupa-filer/misko/dipg29t/n3t10_nocentro_refined | sed 's/\(chr[^:]*\):\([0-9]*\)\([+-]\)\s\(chr[^:]*\):\([0-9]*\)\([+-]\)/\1\t\2\t\3\t\4\t\5\t\6/g' | awk '{OFS="\t"; type=0; if ($3=="+") {if ($6=="+") {type=0} else {type=2} } else { if ($6=="+") {type=3} else {type=1} }; print $1,$2,$5,type,$7,0,0,0.0,0,$4,"EDGE" }'
