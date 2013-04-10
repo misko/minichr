@@ -70,7 +70,7 @@ for line in sys.stdin:
 	b=(chrb,coordb)
 
 	s=int(line[2])
-	s=s+sqrt(s)
+	#s=s+sqrt(s)
 
 	if a in arcs and b in arcs:
 		print "%s\t%d\t%s\t%s\t%d\t%s\t%d" % (from_chr(chra),coorda,astrand,from_chr(chrb),coordb,bstrand,round(s/((arcs[a]+arcs[b])/4)))

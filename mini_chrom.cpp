@@ -17,13 +17,15 @@
 
 
 
-#define MIN_FLOW 3
-#define MAX_FLOW 20
-#define MAX_FREE 70
+#define MIN_FLOW 6
+#ifndef MAX_FLOW
+#define MAX_FLOW 60
+#endif
+#define MAX_FREE 40
 
 
 
-#define ZERO 1e-7
+#define ZERO 1e-6
 
 
 #define MAX_EDGE_SIZE 2400
@@ -74,7 +76,7 @@ class edge_info {
 		double normal_coverage;
 		double cancer_coverage;
 		unsigned int type;
-		double supporting;
+		int supporting;
 };
 
 class state {
@@ -130,10 +132,10 @@ class state_hash {
 	public:
 		unsigned int last_coord;
 		unsigned int first_coord; 	
+		unsigned int x;
 		double score;
 		int cp;
 		size_t edges,free_edges;
-		double ncov,ccov,pcov;
 		state_hash(state s) {
 			last_coord = first_coord =0;
 			if (s.gpath_vector.size()>0) {
@@ -141,13 +143,19 @@ class state_hash {
 				first_coord = s.gpath_vector.front().posa.coord;
 			}
 			
+			x=0;
+			for (multiset<edge>::iterator sit = s.gpath_set.begin(); sit!=s.gpath_set.end(); sit++) {
+				const edge & e = *sit;
+				x+=e.posa.coord+e.posb.coord;
+			}
+
 			edges=s.gpath_vector.size();
 			free_edges=s.fpath_set.size();
 			score=s.score;
 			cp=s.cp;
-			ncov=s.ncov;
-			ccov=s.ccov;
-			pcov=s.pcov;
+			//ncov=s.ncov;
+			//ccov=s.ccov;
+			//pcov=s.pcov;
 		}
 		//opeartors
 		bool operator<(const state_hash &other) const {
@@ -187,7 +195,7 @@ set<pos> re_free_edges(pos & key) {
 }
 
 map<edge, int> free_edges_bound;
-map<pos, double> cancer_pair_coverage;
+/*map<pos, double> cancer_pair_coverage;
 double re_cancer_pair_coverage(pos & key) {
 	if (cancer_pair_coverage.find(key)==cancer_pair_coverage.end()) {
 		cerr << "ERRO IN THE CANCER PAIR COVERAGE LOOKUP" << endl;
@@ -204,7 +212,7 @@ double re_normal_pair_coverage(pos & key) {
 		exit(1);
 	}
 	return normal_pair_coverage[key];
-}
+}*/
 unsigned int total_normal_pair_arcs;
 unsigned int total_cancer_pair_arcs;
 map<edge, state> edge_bests;
@@ -351,7 +359,7 @@ double segment_cov_ratio(pos p, bool strand) {
 		}
 				
 	}
-	return ccov/(0.001*ccov+ncov);
+	return ccov/(0.001*ccov+ncov/2);
 }
 
 unsigned int bound_pos(pos p) {
@@ -474,13 +482,38 @@ void state::add_edge(edge e, bool append) {
 	//reflect the change in the set
 	gpath_set.insert(e);
 
+
+	//do a simple cycle check
+	/*bool gpath_cycle=true;
+	for (multiset<edge>::iterator eit = gpath_set.begin(); eit!=gpath_set.end(); eit++) {
+		if (gpath_set.count(*eit)!=3) {
+			gpath_cycle=false;
+			break;
+		}
+	}
+	if (gpath_cycle) {
+		bool fpath_cycle=true;
+		for (multiset<edge>::iterator eit = fpath_set.begin(); eit!=fpath_set.end(); eit++) {
+			if (fpath_set.count(*eit)!=3) {
+				fpath_cycle=false;
+				break;
+			}
+		}
+		if (fpath_cycle) {
+			cerr << "breaking a weird loop" << endl;
+			score=0;
+			bp_check=false;
+			return;		
+		}
+	}
+
 	//a simple cycle check DEBUG TODO
 	if (gpath_vector.size()>10) {
 		int sz = gpath_vector.size();
 		if (gpath_vector[sz-1]==gpath_vector[sz-3] && gpath_vector[sz-3]==gpath_vector[sz-5] && gpath_vector[sz-5]==gpath_vector[sz-7]) {
 			cerr << "SOMETHING WEIRD\n"; exit(1);
 		}
-	}
+	}*/
 
 
 	//find the best score
@@ -504,14 +537,14 @@ void state::add_edge_to_score(edge e) {
 	if (count>0) {
 		//remove its value from the scorings
 		for (int i=MIN_FLOW; i<MAX_FLOW; i++) {
-			double eflow=abs(ei.normal_coverage*i*count-ei.cancer_coverage);
+			double eflow=abs(ei.normal_coverage/2*i*count-ei.cancer_coverage);
 			scores[i]-=ebase-eflow;
 		}
 	}
 
 	//ok now lets add the thing back with a count+1
 	for (int i=MIN_FLOW; i<MAX_FLOW; i++) {
-		double eflow=abs(ei.normal_coverage*i*(count+1)-ei.cancer_coverage);
+		double eflow=abs(ei.normal_coverage/2*i*(count+1)-ei.cancer_coverage);
 		scores[i]+=ebase-eflow;
 	}
 }
@@ -519,7 +552,7 @@ void state::add_edge_to_score(edge e) {
 unsigned int state::arc_edge_bound(edge & prev, edge & curr) {
 	if (prev.posb==curr.posa) {
 		//its a genomic edge
-		if (re_free_edges(prev.posb).size()>0) {
+		/*if (re_free_edges(prev.posb).size()>0) {
 			size_t count = MIN(gpath_set.count(prev)+gpath_set.count(prev.reverse()),gpath_set.count(curr)+gpath_set.count(curr.reverse())); //TODO just an estimate
 			double normal_pairs = re_normal_pair_coverage(prev.posb);
 			double cancer_pairs = re_cancer_pair_coverage(prev.posb);
@@ -536,9 +569,23 @@ unsigned int state::arc_edge_bound(edge & prev, edge & curr) {
 			return bound/count + (bound%count!=0 ? 1 : 0 ); //TODO smoothing estimate
 		} else {
 			return MAX_FLOW;
-		}
+		}*/
+		return MAX_FLOW;
 	} else {
+		return MAX_FLOW;
+		edge e = edge(prev.posb,curr.posa);
+		edge_info ei = re_edges(e);
+
+
+		/*unsigned int posa_bound = bound_pos(prev.posb);
+		unsigned int posb_bound = bound_pos(curr.posa);
+		unsigned int bound=1+MAX(posa_bound,posb_bound);
+		
+		return MIN(ei.supporting,bound);
+	
+		return ei.supporting;*/
 		//its a free edge
+		/*
 		double normal_pairs_prev = re_normal_pair_coverage(prev.posb);
 		double normal_pairs_curr = re_normal_pair_coverage(curr.posa);
 		edge e = edge(prev.posb,curr.posa);
@@ -549,7 +596,7 @@ unsigned int state::arc_edge_bound(edge & prev, edge & curr) {
 		unsigned int posb_bound = bound_pos(curr.posa);
 		unsigned int bound=1+MAX(MAX(posa_bound,posb_bound),supporting_bound);
 		size_t count = fpath_set.count(e) + fpath_set.count(e.reverse());
-		return bound/count + (bound%count!=0 ? 1 : 0);
+		return bound/count + (bound%count!=0 ? 1 : 0);*/
 	}
 
 }
@@ -689,6 +736,12 @@ bool state::is_dup() {
 
 
 bool state::go_on() {
+	if (gpath_vector.size()<4) {
+		return true;
+	}
+	if (score<=ZERO) {
+		return false;
+	}
 	return tail_check()>ZERO;
 }
 
@@ -794,7 +847,7 @@ string state::str() {
 				}
 				edge ex = edge(last.posb,e.posa);
 				edge_info ei = re_edges(ex);
-				double cancer_pairs_posa = re_cancer_pair_coverage(last.posb);
+				/*double cancer_pairs_posa = re_cancer_pair_coverage(last.posb);
 				double normal_pairs_posa = re_normal_pair_coverage(last.posb);
 				double cancer_pairs_posb = re_cancer_pair_coverage(e.posa);
 				double normal_pairs_posb = re_normal_pair_coverage(e.posa);
@@ -807,7 +860,7 @@ string state::str() {
 				//max_flow=MIN(3*MAX(supporting_posa,supporting_posb),max_flow);
 				oss << " SUP: " << supporting_bound ;
 				oss << " posa(cancer,normal) " << cancer_pairs_posa << "," << normal_pairs_posa << " RX: " << supporting_posa << " R:" << cancer_pairs_posa/(0.001*cancer_pairs_posa+ normal_pairs_posa);
-				oss << " posb(cancer,normal) " << cancer_pairs_posb << "," << normal_pairs_posb << " RX: " << supporting_posb << " R:" << cancer_pairs_posb/(0.001*cancer_pairs_posb+ normal_pairs_posb) << endl;
+				oss << " posb(cancer,normal) " << cancer_pairs_posb << "," << normal_pairs_posb << " RX: " << supporting_posb << " R:" << cancer_pairs_posb/(0.001*cancer_pairs_posb+ normal_pairs_posb) << endl;*/
 
 				
 				//print also the next edge
@@ -817,8 +870,8 @@ string state::str() {
 				set<pos>::iterator sit = bps.find(e.posb);
 				if (last.is_forward()) {
 					pos previous = e.posb;
+					sit++;
 					while (sit!=bps.end() && bp<MAX_EDGE_SIZE) {
-						sit++;
 						pos p = *sit;
 						edge e = edge(previous,p);
 						bp+=e.length();
@@ -829,6 +882,7 @@ string state::str() {
 						if (re_free_edges(p).size()>0) {
 							break;
 						}
+						sit++;
 					}
 				} else {
 					pos previous = e.posb;
@@ -864,8 +918,8 @@ string state::str() {
 				set<pos>::iterator sit = bps.find(e.posb);
 				if (last.is_forward()) {
 					pos previous = e.posb;
+					sit++;
 					while (sit!=bps.end() && bp<MAX_EDGE_SIZE) {
-						sit++;
 						pos p = *sit;
 						edge e = edge(previous,p);
 						bp+=e.length();
@@ -876,6 +930,7 @@ string state::str() {
 						if (re_free_edges(p).size()>0) {
 							break;
 						}
+						sit++;
 					}
 				} else {
 					pos previous = e.posb;
@@ -1007,7 +1062,7 @@ vector<state> state::children() {
 		//can enter the edge?
 		//
 		int type = fei.type;
-		double supporting = fei.supporting;
+		int supporting = fei.supporting;
 		/*if (supporting<1e-15) {
 			cerr << "HUGE ERROR"  << fe.posa.chr << ":" << fe.posa.coord << " " << fe.posb.chr << ":" << fe.posb.coord << endl;	
 			exit(1);
@@ -1100,7 +1155,7 @@ int to_chr(const char * s) {
 }
 
 //read in the bp arcs
-unsigned long read_arcs(char * filename, bool normal) {
+/*unsigned long read_arcs(char * filename, bool normal) {
 	ifstream f (filename);
 	string chr_s;
 	unsigned int coord;
@@ -1132,27 +1187,27 @@ unsigned long read_arcs(char * filename, bool normal) {
 		}
 		//total+=arcs;
 	}
-	/*
-	set<pos>::iterator sit;
-	if (normal) {
-		for (map<pos,double>::iterator sit = normal_pair_coverage.begin(); sit!=normal_pair_coverage.end(); sit++) {
-			normal_pair_coverage[sit->first]=sit->second/total;
-		}
-		total_normal_pair_arcs=total;
-	} else {
-		for (map<pos,double>::iterator sit = cancer_pair_coverage.begin(); sit!=cancer_pair_coverage.end(); sit++) {
-			cancer_pair_coverage[sit->first]=sit->second/total;
-		}
-		total_cancer_pair_arcs=total;
-	}
-	*/
+	
+	//set<pos>::iterator sit;
+	//if (normal) {
+	//	for (map<pos,double>::iterator sit = normal_pair_coverage.begin(); sit!=normal_pair_coverage.end(); sit++) {
+	//		normal_pair_coverage[sit->first]=sit->second/total;
+	//	}
+	//	total_normal_pair_arcs=total;
+	//} else {
+	//	for (map<pos,double>::iterator sit = cancer_pair_coverage.begin(); sit!=cancer_pair_coverage.end(); sit++) {
+	//		cancer_pair_coverage[sit->first]=sit->second/total;
+	//	}
+	//	total_cancer_pair_arcs=total;
+	//}
+	
 
 	cerr << "Read " << total << " arcs from " << filename << endl;
 	return total;
-}
+}*/
 
 //read in the edges from clustering
-void read_links(char * filename,unsigned long total_paired) {
+void read_links(char * filename) {
 	ifstream f (filename);
 	//char chr[10]="";
 	unsigned int bpa,bpb,l_from,l_to,cluster_idx;
@@ -1182,15 +1237,18 @@ void read_links(char * filename,unsigned long total_paired) {
 			exit(1);
 		}
 
+		if (posa.chr>26 || posb.chr>26) {
+			cerr << "EDGE EROR" << endl;
+		}
 		bps.insert(posa);
 		bps.insert(posb);
 
 
-		double v = ((double)total)/total_paired;
-		if (v<1e-15) {
-			cerr << "ERROR: READING LINKS " << v << endl;
-			exit(1);
-		}
+		//double v = ((double)total)/total_paired;
+		//if (v<1e-15) {
+		//	cerr << "ERROR: READING LINKS " << v << endl;
+		//	exit(1);
+		//}
 		
 
 		//add the one direction
@@ -1198,7 +1256,7 @@ void read_links(char * filename,unsigned long total_paired) {
 
 		free_edges[posa].insert(posb);
 		edges[ea].type=type;
-		edges[ea].supporting=v;
+		edges[ea].supporting=total;
 		edges[ea].bp=ea.length();
 
 		//add the other direction
@@ -1209,7 +1267,7 @@ void read_links(char * filename,unsigned long total_paired) {
 		}
 		free_edges[posb].insert(posa);
 		edges[eb].type=type;
-		edges[eb].supporting=v;
+		edges[eb].supporting=total;
 		edges[eb].bp=eb.length();
 	}
 	cerr << "Read " << total_links << " links from " << filename << endl;	
@@ -1221,15 +1279,16 @@ void read_links(char * filename,unsigned long total_paired) {
 
 void read_cov(char * filename, bool normal) {
 	cerr << "Reading coverage from file " << filename << endl;
-	gzFile gzf = gzopen(filename,"r");
-	if (gzf==NULL) {
+
+	FILE * fptr = fopen(filename,"r");
+	if (fptr==NULL) {
 		fprintf(stderr, "Failed to open file %s\n",filename);
 		exit(1);
 	}
 	
 	//find the size of one entry
 	size_t soe = sizeof(unsigned short)+sizeof(unsigned int)+sizeof(unsigned short);
-	size_t chunk = 1024*1024*1024;
+	size_t chunk = 30737418240L;
 	//size_t chunk = 64*1024*1024;
 	size_t size_so_far = 0;
 	char * buffer = (char*) malloc(chunk);
@@ -1249,18 +1308,23 @@ void read_cov(char * filename, bool normal) {
 
 
 	//the real read loop
-	while (!gzeof(gzf)) {
-		int read = gzread(gzf,buffer+size_so_far,chunk);
-		cerr << "\rRead so far " << size_so_far;
-		if (read<0) {
+	while (!feof(fptr)) {
+		size_t read = fread(buffer+size_so_far,1,chunk,fptr);
+		size_so_far+=read;
+		cerr << "Read so far " << size_so_far << endl;
+		/*if (read<0) {
 			cerr << "Error reading gzipped file!\n";
 			exit(1);
-		}
-		size_so_far+=read;
-		buffer=(char*)realloc(buffer,size_so_far+chunk);
-		if (buffer==NULL) {
-			cerr << " FALLED TO REALLOC " << endl;
+		}*/
+
+		if (read==chunk) {
+			cerr << "REALLOC" << endl;
 			exit(1);
+			buffer=(char*)realloc(buffer,size_so_far+chunk);
+			if (buffer==NULL) {
+				cerr << " FALLED TO REALLOC " << endl;
+				exit(1);
+			}
 		}
 	}
 	
@@ -1355,24 +1419,29 @@ void read_cov(char * filename, bool normal) {
 
 int main(int argc, char ** argv) {
 	//need to load in files
-	if (argc!=6) {
-		printf("%s links cov_cancer cov_normal pairs_cancer pairs_normal\n", argv[0]);
+	if (argc!=4) {
+		printf("%s links cov_cancer cov_normal\n", argv[0]);
 		exit(1);
 	}
+
+
 
 	char * links_filename=argv[1];
 	char * cov_cancer_filename=argv[2];
 	char * cov_normal_filename=argv[3];
-	char * pairs_cancer_filename=argv[4];
-	char * pairs_normal_filename=argv[5];
+
+	cout << "#" << MAX_FLOW << "\t" << links_filename << "\t" << cov_cancer_filename << "\t" << cov_normal_filename << endl;
+
+	//char * pairs_cancer_filename=argv[4];
+	//char * pairs_normal_filename=argv[5];
 
 	fake_edge=edge(pos(0,0),pos(0,0));
 
 	//read in the arc weights
-	unsigned long total_normal_paired_mappings = read_arcs(pairs_normal_filename,true);	
-	unsigned long total_cancer_paired_mappings = read_arcs(pairs_cancer_filename,false);	
+	//unsigned long total_normal_paired_mappings = read_arcs(pairs_normal_filename,true);	
+	//unsigned long total_cancer_paired_mappings = read_arcs(pairs_cancer_filename,false);	
 	//read in the free edges
-	read_links(links_filename,total_cancer_paired_mappings);
+	read_links(links_filename);
 
 	cerr << "Slicing edges" << endl;
 	//cerr << "Slicing WARNING edges" << endl;
@@ -1393,7 +1462,7 @@ int main(int argc, char ** argv) {
 		}
 		if (current.chr==next.chr && next.coord-current.coord>MAX_EDGE_SIZE) {
 			pos i = pos(current.chr,current.coord+MAX_EDGE_SIZE);
-			while (next.coord>MAX_EDGE_SIZE+i.coord) {
+			while (next.coord>i.coord) {
 				to_add.insert(i);
 				i = pos(current.chr,i.coord+MAX_EDGE_SIZE);
 			}
@@ -1431,6 +1500,7 @@ int main(int argc, char ** argv) {
 	}
 
 	//read in the normal
+	//cerr << "WARNING NO COV" << endl;
 	read_cov(cov_normal_filename,true);
 	read_cov(cov_cancer_filename,false);
 
@@ -1449,6 +1519,7 @@ int main(int argc, char ** argv) {
 			edge ea = edge(previous,current);
 			edge eb = ea.reverse();
 			if (re_free_edges(ea.posa).size()>0 || re_free_edges(ea.posb).size()>0) {
+				//cerr << " adding a start edge " << ea.posa.chr << ":" << ea.posa.coord << " " << ea.posb.chr << ":" << ea.posb.coord << endl;
 				start_edges.push_back(ea);
 				start_edges.push_back(eb);
 			}
@@ -1519,7 +1590,7 @@ int main(int argc, char ** argv) {
 				best_states[0]=s;
 			}
 			//cout << s.str() <<  s.score << endl;
-			if (s.score>ZERO && s.go_on()) {
+			if (s.go_on()) {
 				pq.push(s);
 			}
 
@@ -1532,7 +1603,7 @@ int main(int argc, char ** argv) {
 
 				state_hash sh = state_hash(s);
 
-				if (visited.count(sh)>0) {
+				if (s.gpath_vector.size()>4 && visited.count(sh)>0) {
 					continue;
 				} else {
 					//mark this as visited : TODO right way to handle?
@@ -1557,7 +1628,7 @@ int main(int argc, char ** argv) {
 						continue;
 					}*/
 
-					if (c.score>ZERO && c.go_on()) {
+					if (c.go_on()) {
 						//cout << "CHILD" << endl << c.str() << endl;
 						pq.push(c);
 					} else {
@@ -1592,12 +1663,12 @@ int main(int argc, char ** argv) {
 			//fix up the coverage
 			edge e = best_state.gpath_vector[i];
 			edge_info ei = re_edges(e);
-			ei.cancer_coverage -= MAX(0,ei.normal_coverage*best_state.cp);	
+			ei.cancer_coverage -= MAX(0,ei.normal_coverage/2*best_state.cp);	
 			edges[e]=ei;
 		
 			edge er = e.reverse();
 			edge_info eri = re_edges(er);
-			eri.cancer_coverage -= MAX(0,eri.normal_coverage*best_state.cp);			
+			eri.cancer_coverage -= MAX(0,eri.normal_coverage/2*best_state.cp);			
 			edges[er]=eri;
 
 			//fix up the supporting arcs
@@ -1606,23 +1677,26 @@ int main(int argc, char ** argv) {
 				edge & curr = best_state.gpath_vector[i];
 				if (prev.posb==curr.posa) {
 					//genomic edge
-					if (re_free_edges(prev.posb).size()>0) {
+					/*if (re_free_edges(prev.posb).size()>0) {
 						double n = normal_pair_coverage[prev.posb];
 						cancer_pair_coverage[prev.posb]=MAX(0,cancer_pair_coverage[prev.posb]-n*best_state.cp);
-					}
+					}*/
+					
 				} else {
 					//free edge
-					double na = normal_pair_coverage[prev.posb];
-					double nb = normal_pair_coverage[curr.posa];
+					//double na = normal_pair_coverage[prev.posb];
+					//double nb = normal_pair_coverage[curr.posa];
 
 					edge e = edge(prev.posb,curr.posa);
 					edge_info ei = re_edges(e);
-					ei.supporting=MAX(0,ei.supporting-(0.5*na+0.5*nb)*best_state.cp);
+					//ei.supporting=MAX(0,ei.supporting-(0.5*na+0.5*nb)*best_state.cp);
+					ei.supporting=MAX(0,ei.supporting-best_state.cp);
 					edges[e]=ei;
 
 					edge er = e.reverse();
 					edge_info eri = re_edges(er);
-					eri.supporting=MAX(0,eri.supporting-(0.5*na+0.5*nb)*best_state.cp);
+					//eri.supporting=MAX(0,eri.supporting-(0.5*na+0.5*nb)*best_state.cp);
+					eri.supporting=MAX(0,eri.supporting-best_state.cp);
 					edges[er]=eri;
 				}
 			}

@@ -21,7 +21,7 @@ using namespace std;
 #define WEIRD_STDDEV	4
 #define MAX_STDDEV	15
 
-#define SIZE_RES	1
+#define SIZE_RES	10
 #define GC_RES	1
 
 class pos {
@@ -319,7 +319,7 @@ int main(int argc, char ** argv) {
 					//this is kinda weird
 					continue;
 				}
-	
+
 
 				//cerr << my_chr << ":" << my_pos << (my_strand ?  "+" : "-" )  << " " << mate_chr << ":" << mate_pos  << (mate_strand ? "+" : "-" ) << endl;
 
@@ -344,22 +344,25 @@ int main(int argc, char ** argv) {
 						
 					if (left.strand && !right.strand) {
 						//the only case we count it
-						/*
 						if (isize>max_size) {
 							max_size=isize;
 						}
-						int gc = get_gc(left,pos(right.chr,left.coord+isize,right.strand));
+						/*int gc = get_gc(left,pos(right.chr,left.coord+isize,right.strand));
 						gcs[SIZE_RES*((int)(isize/SIZE_RES))][GC_RES*((int)(gc/GC_RES))]++;
 						total++;
-						size_totals[SIZE_RES*((int)isize/SIZE_RES)]++; */
-						max_size=400;
+						size_totals[SIZE_RES*((int)isize/SIZE_RES)]++;*/ 
+
+
+						//take only the center
+						
 						unsigned int center = left.coord + isize/2;
-						pos xleft = pos(left.chr, MAX(200,center)-200, left.strand); 
-						pos xright = pos(right.chr, center+200, right.strand); 
+						isize=310;
+						pos xleft = pos(left.chr, MAX(isize/2,center)-isize/2, left.strand); 
+						pos xright = pos(right.chr, center+isize/2, right.strand); 
 						int gc = get_gc(xleft,xright);
-						gcs[400][gc]++;
+						gcs[SIZE_RES*((int)(isize/SIZE_RES))][GC_RES*((int)(gc/GC_RES))]++;
 						total++;
-						size_totals[400]++; 
+						size_totals[SIZE_RES*((int)isize/SIZE_RES)]++;
 						
 						//cerr << "HAS GC " << gc << endl;
 					}
@@ -397,7 +400,7 @@ int main(int argc, char ** argv) {
 
 	//print out fractions	
 	for (int i=1; i*SIZE_RES<=max_size; i++) {
-		if ((total/20)<size_totals[i*SIZE_RES]) {
+		if ((total/500)<size_totals[i*SIZE_RES]) {
 			cout << i*SIZE_RES << "\t";
 			for (int j=0; j*GC_RES<=i*SIZE_RES; j++) {
 				cout << ((double)j*GC_RES)/i*SIZE_RES << "\t" ;

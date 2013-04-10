@@ -574,9 +574,24 @@ int main(int argc, char ** argv) {
 	//lets slice up the rest
 	set<pos> to_add;
 	//unsigned int i=0;
-	
+
+
+	int last_chr=0;
+	pos xprevious=pos(0,0);	
 	for (set<pos>::iterator it=bps.begin(); it!=bps.end(); ) {
 		pos current=*it;
+		if (current.chr!=last_chr) {
+			if (current.coord>MAX_EDGE_SIZE) {
+				to_add.insert(pos(current.chr,current.coord-MAX_EDGE_SIZE));
+			} else {
+				cerr << "TOO CLOSE!" << endl;
+				exit(1);
+			}
+			last_chr=current.chr;	
+			if (xprevious.chr!=0) {
+				to_add.insert(pos(xprevious.chr,xprevious.coord+MAX_EDGE_SIZE));
+			}
+		}
 		/*i++;
 		if (i>2000) {
 			break;
@@ -595,6 +610,10 @@ int main(int argc, char ** argv) {
 				i = pos(current.chr,i.coord+MAX_EDGE_SIZE);
 			}
 		}
+		xprevious=current;
+	}
+	if (xprevious.chr!=0) {
+		to_add.insert(pos(xprevious.chr,xprevious.coord+MAX_EDGE_SIZE));
 	}
 	for (set<pos>::iterator it=to_add.begin(); it!=to_add.end(); it++) {
 		if ( (*it).chr>26 ) {
@@ -899,6 +918,12 @@ int main(int argc, char ** argv) {
 				normal=total_normal_coverage*ei.cancer_coverage/100;
 				cancer=(total_normal_coverage*ei.normal_coverage/100)/2;
 				cp=re_edges(e).copy_number;
+				if (re_free_edges(current).size()!=0) {
+					cout << cp << "\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << e.length() << "\t" << normal << "\t" << cancer << endl;
+					e=edge(current,current);
+					normal=0;
+					cancer=0;
+				}
 			} else {
 				//see if we can add
 				edge xe = edge(e.posb,current);
@@ -923,13 +948,20 @@ int main(int argc, char ** argv) {
 					normal=total_normal_coverage*ei.cancer_coverage/100;
 					cancer=(total_normal_coverage*ei.normal_coverage/100)/2;
 					cp=xcp;
+					if (re_free_edges(current).size()!=0) {
+						cout << cp << "\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << e.length() << "\t" << normal << "\t" << cancer << endl;
+						e=edge(current,current);
+						normal=0;
+						cancer=0;
+					}
 				}
 			}
 		}
 	}
 	if (e.length()>0) {
 		//print the edge out
-		cout << cp << "\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << e.length() << endl;
+		cout << cp << "\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << e.length() << "\t" << normal << "\t" << cancer << endl;
+		//cout << cp << "\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << e.length() << endl;
 	}
 
 	cerr << "CLEAN" << endl;	
