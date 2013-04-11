@@ -133,7 +133,7 @@ string pos::str() {
 	} else {
 		sprintf(cchr,"%d",chr);
 	}
-	sprintf(buffer,"chr%s:%u%c" , cchr,coord, strand ? '+' : '-');
+	sprintf(buffer,"chr%s\t%u\t%c" , cchr,coord, strand ? '+' : '-');
 	return string(buffer);
 }
 bool pos::operator<(const pos &other) const {
@@ -1089,7 +1089,7 @@ int main( int argc, char ** argv) {
 		}
 	}
 
-	cout << "BP1\tBP2\tSUPPORT\tEBP1\tEBP2\tSEBP1\tSEBP2\tSUPPORT" << endl;
+	cout << "#BP1\tBP2\tSUPPORT\tEBP1\tEBP2\tSEBP1\tSEBP2\tSUPPORT" << endl;
 
 	for (int cid=0; cid<clusters.size(); cid++) {
 		cluster & c = clusters[cid];
