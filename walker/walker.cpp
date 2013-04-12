@@ -298,7 +298,10 @@ void edge_info::poisson() {
 		double n = i*((int)normal)-((int)tumor);
 		if (n<0) {
 			n=-n;
+		} else {
+			n=n*n;
 		}
+		
 		scores[i]=n-base;
 	}		
 
