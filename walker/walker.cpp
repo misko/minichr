@@ -14,21 +14,20 @@
 #include <string.h>
 #include <limits>
 
-#define	SZ	100	//max ocpy count
-#define MAX_WALK	150
+#define	SZ	80	//max ocpy count
+#define MAX_WALK	180
+#define MAX_REUSE	2
+#define MIN_CP	1
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
+#define	SOMATICW	0.5
+#define GENOMICW	1
+
 using namespace std;
 
 
-double abs(double a) {
-	if (a<0) {
-		return -a;
-	}
-	return a;
-}
 
 class pos {
 	public:
@@ -58,7 +57,7 @@ class edge {
 		bool operator!=(const edge &other) const;
 		bool is_forward();
 		unsigned int bound_cp();
-		edge canonical();
+		edge canonical() const;
 };
 
 
@@ -85,10 +84,15 @@ class walk  {
 		vector<walk> successors();
 		walk append_edge(edge e);
 		string str();
-		void edge_score_correction(edge_info & ei , int old_cp, int new_cp);
+		void edge_score_correction(edge_info & ei , int old_cp, int new_cp, double w);
 		bool operator<(const walk &other) const;
 		bool operator>(const walk &other) const;
 		double score() const;
+		double heuristic() const;
+		double heuristic_helper(map<edge,edge_info> & m) const;
+		int best_cp() const;
+		walk merge_walk(walk a);
+		walk();
 };
 
 //some global variables
@@ -210,7 +214,7 @@ edge edge::reverse() {
 	return edge(posb,posa,genomic);
 }
 
-edge edge::canonical() {
+edge edge::canonical() const {
 	if (posa<posb) {
 		return edge(posa,posb,genomic);
 	} else {
@@ -265,6 +269,7 @@ edge_info::edge_info() {
 	}
 }
 
+
 void edge_info::poisson() {
 		
 	if (normal==0 || tumor==0) {
@@ -272,16 +277,33 @@ void edge_info::poisson() {
 	}
 
 	// a bit of smoothing like thing?
-	normal+=2;
+	/*normal+=2;
 	tumor+=2;
 
-	scores[0]=normal*0.1-tumor*log(normal*0.1);
-	for (int i=1; i<SZ; i++) {
-		scores[i]=normal*i-tumor*log(normal*i);
-	}
+
+	double z = normal/(5.0+(length>50 ? sqrt(length) : 0));
+	normal=normal/z+2;
+	tumor=tumor/z+2;*/
+
+	for (int i=0; i<SZ; i++) {
+		/*if (i==0) {
+			scores[i]=normal*0.1-tumor*log(normal*0.1);
+			continue;
+		}
+		scores[i]=normal*i-tumor*log(normal*i);*/
+		double base = 2.0*normal-((int)tumor);
+		if (base<0) {
+			base=-base;
+		}
+		double n = i*((int)normal)-((int)tumor);
+		if (n<0) {
+			n=-n;
+		}
+		scores[i]=n-base;
+	}		
 
 	//make sure the min value is zero
-	double min=10e100;
+	/*double min=10e100;
 	for (int i=0; i<SZ; i++) {
 		if (min>scores[i]) {
 			min=scores[i];
@@ -290,10 +312,16 @@ void edge_info::poisson() {
 	for (int i=0; i<SZ; i++) {
 		//cerr << scores[i] << "\t" << scores[i]-min << endl;
 		scores[i]-=min;
-	}
+	}*/
+
 }
 
-
+walk::walk() {
+	this->restarts=0;
+	for (int i=0; i<SZ; i++) {
+		scores[i]=0;
+	}
+}
 
 walk::walk(int restarts) {
 	this->restarts=restarts;
@@ -311,12 +339,45 @@ walk::walk(const walk & parent) {
 	this->restarts=parent.restarts;
 }
 
+walk walk::merge_walk(walk a) {
+	walk x = walk(a.restarts+restarts);
+	for (unsigned int i=0; i<a.w.size(); i++) {
+		x=x.append_edge(a.w[i]);
+	}
+	for (unsigned int i=0; i<w.size(); i++) {
+		x=x.append_edge(w[i]);
+	}
+	return x;
+}
+
 double walk::score() const {
 	double my_min=10e100;
-	for (int i=0; i<SZ; i++) {
+	for (int i=MIN_CP; i<SZ; i++) {
 		my_min=MIN(my_min,scores[i]);
 	}
 	return my_min;
+}
+
+double walk::heuristic_helper(map<edge,edge_info> & m) const {
+	double x=0;
+	for (map<edge,edge_info>::iterator mit = m.begin(); mit!=m.end(); mit++) {
+		const edge & e = mit->first;
+		if (e==e.canonical() && used_edges.find(e)==used_edges.end()) {
+			double min = 10e100;
+			for (int i=0; i<SZ; i++) {
+				if (mit->second.scores[i]<min) {
+					min=mit->second.scores[i];
+				}
+			}
+			x+=min;			
+		}
+	}
+	return x;
+}
+
+double walk::heuristic() const {
+	double h=score()+GENOMICW*heuristic_helper(genomic_edges)+SOMATICW*heuristic_helper(somatic_edges);
+	return h;
 }
 
 bool walk::operator>(const walk &other) const {
@@ -667,22 +728,48 @@ map<pos, int> find_connected_components() {
 
 }
 
-void walk::edge_score_correction(edge_info & ei , int old_m, int new_m) {
-	if (old_m>=new_m) {
+void walk::edge_score_correction(edge_info & ei , int old_m, int new_m,double w) {
+	/*if (old_m>=new_m) {
 		cerr << "Problem in lowering copy count, really should recompute, +/- inf" << endl;
 		exit(1);
 	}
 	//subtract out the old and add the new
 	for (int i=1; i<SZ; i++) {
-		scores[i]+=(ei.scores[i*old_m]-ei.scores[0]);
+		if (i*old_m<SZ) {
+			scores[i]-=w*(ei.scores[i*old_m]-ei.scores[0]);
+		} else {
+			scores[i]=-log(0);
+		}
 	}
 	//add in the new
 	for (int i=1; i<SZ; i++) {
-		scores[i]+=(ei.scores[i*new_m]-ei.scores[0]);
+		if (i*new_m<SZ) {
+			scores[i]+=w*(ei.scores[i*new_m]-ei.scores[0]);
+		} else {
+			scores[i]=-log(0);
+		}
+	}*/
+	for (int i=0; i<SZ; i++) {
+		if (i*new_m<SZ) {
+			scores[i]-=w*ei.scores[i*old_m];
+			scores[i]+=w*ei.scores[i*new_m];
+		} else {
+			scores[i]=-log(0);
+		}
 	}
 }
 
 walk walk::append_edge(edge e) {
+	//simple check
+	int length=0;
+	for (map<edge,int>::iterator mit=used_edges.begin(); mit!=used_edges.end(); mit++) {
+		length+=mit->second;
+	}
+	if (length!=w.size()) {
+		cerr << "FAILED CHECK " << length << " " << w.size() << endl;
+		exit(1);		
+	}
+
 	walk x = walk(*this);
 	//add it to the walk
 	x.w.push_back(e);
@@ -700,12 +787,21 @@ walk walk::append_edge(edge e) {
 	//otherwise we need to actually update the score
 	edge ce = e.canonical();
 	if (e.genomic) {
+		if (genomic_edges.find(ce)==genomic_edges.end()) {
+			cerr << "error asdlfkjasdfubbuub5" << endl;
+			exit(1);
+		}
 		edge_info & ei = genomic_edges[ce];
-		x.edge_score_correction(ei,x.used_edges[ce],x.used_edges[ce]+1);
+		//TODO WARNING
+		x.edge_score_correction(ei,x.used_edges[ce],x.used_edges[ce]+1,GENOMICW);
 		x.used_edges[ce]++;
 	} else {
+		if (somatic_edges.find(ce)==somatic_edges.end()) {
+			cerr << "error asdlfkjasdfusdafbbuub5" << endl;
+			exit(1);
+		}
 		edge_info & ei = somatic_edges[ce];
-		x.edge_score_correction(ei,x.used_edges[ce],x.used_edges[ce]+1);
+		x.edge_score_correction(ei,x.used_edges[ce],x.used_edges[ce]+1,SOMATICW);
 		x.used_edges[ce]++;
 	}
 	
@@ -718,7 +814,23 @@ vector<walk> walk::successors() {
 
 	//add the restart if we are allowed
 	if (restarts>used_edges[he]) {
-		s.push_back(append_edge(he));
+		//for circular
+		if (w.size()>0) {
+			int i;
+			for (i=w.size()-1; i>0; i--) {
+				if (w[i]==he) {
+					break;
+				} 
+			}
+	
+			i++;
+			if (w[i].posa==w.back().posb) {
+				s.push_back(append_edge(he));
+			}
+			
+		} else {
+			s.push_back(append_edge(he));
+		}
 	}
 
 	//if this is a walk of size zero do the thing
@@ -733,25 +845,83 @@ vector<walk> walk::successors() {
 		//try ever start edge
 		for (map<edge,edge_info>::iterator mit = genomic_edges.begin(); mit!=genomic_edges.end(); mit++ ) {
 			edge e = mit->first;
-			s.push_back(append_edge(e));
+			if (jump_edges.find(e.posa)!=jump_edges.end() || jump_edges.find(e.posb)!=jump_edges.end()) {
+				s.push_back(append_edge(e));
+			}
 			//s.push_back(append_edge(e.reverse()));
 		}	
 	} else {
-		//try the next genomic edge
-		if (last_e.is_forward()) {
-			edge e = get_next_genomic_edge(last_e.posb);	
-			if (e!=fake_edge) {
-				s.push_back(append_edge(e));
+
+		if (last_e.genomic) {
+			//try the next genomic edge
+			if (last_e.is_forward()) {
+				edge e = get_next_genomic_edge(last_e.posb);	
+				if (e!=fake_edge && used_edges[e.canonical()]<MAX_REUSE) {
+					s.push_back(append_edge(e));
+				}
+			} else {
+				edge e = get_previous_genomic_edge(last_e.posb);	
+				if (e!=fake_edge && used_edges[e.canonical()]<MAX_REUSE) {
+					s.push_back(append_edge(e));
+				}
+			}
+
+			//try all linking out free edges
+			set<pos> & jumps = jump_edges[last_e.posb];
+			for (set<pos>::iterator sit=jumps.begin(); sit!=jumps.end(); sit++) {
+				edge j = edge(last_e.posb,*sit,false);
+				if (somatic_edges.find(j)==somatic_edges.end()) {
+					cerr << " Should have found edge but didnt.... " << endl;
+					exit(1);
+				}
+				edge_info & ei = somatic_edges[j];
+				if (ei.type==0 || ei.type==2) {
+					//can only use this link if coming on positive
+					if (last_e.is_forward()) {
+						s.push_back(append_edge(j));
+					}
+				} else if (ei.type==1  || ei.type==3) {
+					//can only use this link if coming on negative
+					if (!last_e.is_forward()) {
+						s.push_back(append_edge(j));
+					}
+				} else {
+					cerr << "Failed somatic edge " << endl;
+					exit(1);
+				}	
 			}
 		} else {
-			edge e = get_previous_genomic_edge(last_e.posb);	
-			if (e!=fake_edge) {
-				s.push_back(append_edge(e));
-			}
-		}		
-		//try all linking out free edges
+			//came in on a somatic edge, can only leave through one on the correct orientation
+			edge_info & ei = somatic_edges[last_e];
+			if (ei.type==0 || ei.type==3) {
+				//leave on the positive edge
+				edge e = get_next_genomic_edge(last_e.posb);	
+				if (e!=fake_edge && used_edges[e.canonical()]<MAX_REUSE) {
+					s.push_back(append_edge(e));
+				}
+			} else if (ei.type==2 || ei.type == 1 ) {
+				//leave on the negative edge
+				edge e = get_previous_genomic_edge(last_e.posb);	
+				if (e!=fake_edge && used_edges[e.canonical()]<MAX_REUSE) {
+					s.push_back(append_edge(e));
+				}
+			} else {
+				cerr << "Failed omthing somatic " << endl;
+				exit(1);
+			}	
+		}
 	}
 	return s;
+}
+
+int walk::best_cp() const {
+	int bcp=MIN_CP;
+	for (int i=MIN_CP; i<SZ; i++) {
+		if (scores[i]<scores[bcp]) {
+			bcp=i;
+		}
+	}
+	return bcp;
 }
 
 string walk::str() {
@@ -759,12 +929,49 @@ string walk::str() {
 	stringstream ss;
 	ss << scores[0] << "," << scores[2] << "," << scores[6] << "," << scores[20] << "," << scores[40] <<  "\t:\t";
 	s+=ss.str();
-	for (int i=0; i<w.size(); i++) {
-		s=s+"-> ("+w[i].posa.str() + "," + w[i].posb.str() + ")";
+
+	//find the best copy count
+	int bcp=best_cp();
+
+	for (unsigned int i=0; i<w.size(); i++) {
+		stringstream ss;
+		ss << used_edges[w[i].canonical()]*bcp;
+		s=s+"-> ("+w[i].posa.str() + "," + w[i].posb.str() + "," + ss.str() + "," + (w[i].genomic ? "G" : "S") + ")";
 	}
 	return s;
 }
 
+
+double get_lower_bound(map<edge,edge_info> & m ) {
+	double lb=0;
+	for (map<edge,edge_info>::iterator mit=m.begin(); mit!=m.end(); mit++ ) {	
+		const edge & e = mit->first;
+		if (e!=e.canonical()) {
+			continue;
+		}
+		edge_info & ei = mit->second;
+		//cerr << "G" << ei.scores[0] << "\t" << ei.scores[2] << "\t" <<ei.scores[3] << "\t" << ei.scores[15] << "\t" << ei.scores[40] << "\t" << ei.scores[50] << endl;
+		double min = ei.scores[0];
+		for (int i=1; i<SZ; i++) {
+			min = MIN(ei.scores[i],min);
+		}
+		lb+=min;
+	}
+	return lb;
+}
+
+string edges_usage(map<edge,edge_info> & m, map<edge,int> & edges_used, int mx) {
+	stringstream ss;
+	for (map<edge,edge_info>::iterator mit = m.begin(); mit!=m.end(); mit++) {
+		const edge & e = mit->first;
+		if (e!=e.canonical()) {
+			continue;
+		}
+		const edge_info & ei = mit->second;
+		ss << "(" << e.posa.str() << "," << e.posb.str() << " , cp: " << edges_used[e]*mx << " , cancer: " << ei.tumor << " , normal: " << ei.normal <<  " , ratio: " << ei.tumor/(1+ei.normal)  << " / " << ei.scores[edges_used[e]*mx] << endl;
+	}
+	return ss.str();
+}
 
 int main ( int argc, char ** argv) {
 	if (argc!=4) {
@@ -801,6 +1008,8 @@ int main ( int argc, char ** argv) {
 		cerr << "No max components found....";
 		exit(1);
 	}
+
+	cout << "SOMATICW: " << SOMATICW << "\t" << "GENOMICW: " << GENOMICW << endl;
 
 	cerr << "Considering max component of size " << max << " id " << max_id << endl;
 
@@ -839,9 +1048,8 @@ int main ( int argc, char ** argv) {
 
 
 	//lets find a lower bound on the scores
-	double lower_bound=0;
+	double lower_bound=GENOMICW*get_lower_bound(genomic_edges)+SOMATICW*get_lower_bound(somatic_edges);
 	//first take the genomic
-	//for (map<edge,edge_info>::iterator mit=genomic_edges.begin(); mit!=genomic_edges.end()
 	//then take the somatic			
 
 	walk w=walk(1);
@@ -849,14 +1057,80 @@ int main ( int argc, char ** argv) {
 
 	priority_queue<walk> pq; 
 	pq.push(w);
+
+	walk best_walk=walk(1);
+	cerr << "Starting with walk score of " << best_walk.score() << " lower bound is " << lower_bound << endl;
 	
+	map<double,walk> circle_walks;
+
+	unsigned long dropped=0;
+	unsigned long count=0;
 	while (pq.size()>0) {
 		walk w = pq.top();
+		//check if this is best so far
+		if (w.w.size()>1 && w.w[1].posa==w.w.back().posb) {
+			count++;
+			circle_walks[w.score()+w.heuristic()]=w;
+		}
+		if (w.score()<best_walk.score()) {
+			if (w.w.size()>1 && w.w[1].posa==w.w.back().posb) {
+				best_walk=w;
+				//count++;
+				if (count%1==0) {
+					cerr << "NEW BEST " << best_walk.score() << " , " << lower_bound << " DROPPED:" << dropped << " LENGTH: " << best_walk.w.size() <<  "\t" << best_walk.heuristic() << "\trestarts:" << best_walk.used_edges[he] << endl;
+				}
+				//cerr << "\t" << best_walk.str() << endl;
+			}
+		}
+
 		pq.pop();
 
 		vector<walk> children = w.successors();
+		//check basic heuristic
+		for (unsigned int i=0; i<children.size(); i++) {
+			walk & c = children[i];
+			/*if (c.score()>-lower_bound) {
+				//skip it
+				dropped++;
+				//because even if we got all the negative edges perfect, score would be zero!
+			} else {
+				pq.push(c);
+			}*/
+			pq.push(c);
+		}
+	
 		
+	
 	}	
+	cout << "\t" << best_walk.str() << endl;
+	cout << "GENOMIC:"  << endl << edges_usage(genomic_edges,best_walk.used_edges,best_walk.best_cp()) << endl;
+	cout << "SOMATIC:"  << endl << edges_usage(somatic_edges,best_walk.used_edges,best_walk.best_cp()) << endl;
+	cout << count << endl;
+
+	best_walk = walk(0);
+	cerr << circle_walks.size() << endl;
+
+	vector<walk> circle_walksv;
+	
+	for (map<double,walk>::iterator mit=circle_walks.begin(); mit!=circle_walks.end(); mit++) {
+		circle_walksv.push_back(mit->second);
+	}
+	
+	
+	for (unsigned int i=0; i<circle_walksv.size(); i++) {
+		for (unsigned int j=0; j<circle_walksv.size(); j++) {
+			if (j<i) {
+				walk x = circle_walksv[i].merge_walk(circle_walksv[j]);
+				if (best_walk.score()>x.score() ) {
+					best_walk=x;
+					cerr << "NEW BEST " << best_walk.score() << " , " << lower_bound << " DROPPED:" << dropped << " LENGTH: " << best_walk.w.size() <<  "\t" << best_walk.heuristic() << "\trestarts:" << best_walk.used_edges[he] << endl;
+				}	
+			}
+		}
+	}
+	cout << "\t" << best_walk.str() << endl;
+	cout << "GENOMIC:"  << endl << edges_usage(genomic_edges,best_walk.used_edges,best_walk.best_cp()) << endl;
+	cout << "SOMATIC:"  << endl << edges_usage(somatic_edges,best_walk.used_edges,best_walk.best_cp()) << endl;
 
 	/*vector<walk> ws = w.successors();
 	ws=ws[0].successors();
