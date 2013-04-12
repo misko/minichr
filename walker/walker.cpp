@@ -14,7 +14,7 @@
 #include <string.h>
 #include <limits>
 
-#define	SZ	80	//max ocpy count
+#define	SZ	50	//max ocpy count
 #define MAX_WALK	180
 #define MAX_REUSE	2
 #define MIN_CP	1
@@ -22,7 +22,7 @@
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
-#define	SOMATICW	0.5
+#define	SOMATICW	1
 #define GENOMICW	1
 
 using namespace std;
@@ -277,20 +277,22 @@ void edge_info::poisson() {
 	}
 
 	// a bit of smoothing like thing?
-	/*normal+=2;
+	normal+=2;
 	tumor+=2;
 
 
-	double z = normal/(5.0+(length>50 ? sqrt(length) : 0));
+	/*double z = normal/(5.0+(length>50 ? sqrt(length) : 0));
 	normal=normal/z+2;
 	tumor=tumor/z+2;*/
-
+	//cout << "EDGE\t" << normal << "\t" << tumor << endl;
 	for (int i=0; i<SZ; i++) {
-		/*if (i==0) {
+		if (i==0) {
 			scores[i]=normal*0.1-tumor*log(normal*0.1);
 			continue;
 		}
-		scores[i]=normal*i-tumor*log(normal*i);*/
+		scores[i]=normal*i-tumor*log(normal*i);
+
+		/*
 		double base = 2.0*normal-((int)tumor);
 		if (base<0) {
 			base=-base;
@@ -302,11 +304,13 @@ void edge_info::poisson() {
 			n=n*n;
 		}
 		
+		cerr << "\tn\t" << n << "\tbase\t" << base << endl;
 		scores[i]=n-base;
+		cout << "\t" << i << "\t" << scores[i] << endl;*/
 	}		
 
 	//make sure the min value is zero
-	/*double min=10e100;
+	double min=10e100;
 	for (int i=0; i<SZ; i++) {
 		if (min>scores[i]) {
 			min=scores[i];
@@ -315,7 +319,7 @@ void edge_info::poisson() {
 	for (int i=0; i<SZ; i++) {
 		//cerr << scores[i] << "\t" << scores[i]-min << endl;
 		scores[i]-=min;
-	}*/
+	}
 
 }
 
@@ -976,6 +980,33 @@ string edges_usage(map<edge,edge_info> & m, map<edge,int> & edges_used, int mx) 
 	return ss.str();
 }
 
+
+string arc_strings(int from_node, int to_node , int type, int low, int cap, int cost) {
+	stringstream ss;
+
+	char stranda='+';
+	char strandb='+';
+	if (type==0 || type==2) {
+		stranda='+';
+		if (type==0) {
+			strandb='+';
+		} else {
+			strandb='-';
+		}
+	} else {
+		stranda='-';
+		if (type==1) {
+			strandb='-';
+		} else {
+			strandb='+';
+		}
+	}
+	
+	ss << "a\t" << (stranda=='+' ? -1 : 0 )+2*from_node << "\t" << (strandb=='+' ? -1 : 0 )+2*to_node << "\t" << low << "\t" << cap << "\t" << cost << endl;  
+	ss << "a\t" << (strandb=='-' ? -1 : 0 )+2*to_node << "\t" << (stranda=='-' ? -1 : 0 )+2*from_node << "\t" << low << "\t" << cap << "\t" << cost << endl;  
+	return ss.str();
+}
+
 int main ( int argc, char ** argv) {
 	if (argc!=4) {
 		cerr << argv[0] << " links bp_coverages edges " << endl;
@@ -1012,7 +1043,7 @@ int main ( int argc, char ** argv) {
 		exit(1);
 	}
 
-	cout << "SOMATICW: " << SOMATICW << "\t" << "GENOMICW: " << GENOMICW << endl;
+	cout << "c SOMATICW: " << SOMATICW << "\t" << "GENOMICW: " << GENOMICW << endl;
 
 	cerr << "Considering max component of size " << max << " id " << max_id << endl;
 
@@ -1049,18 +1080,145 @@ int main ( int argc, char ** argv) {
 
 	//now we just have the largest component left!
 
+	stringstream ss;
+
+	//output the graph!
+	int num_nodes = 3; // source1, source2, sink, rest
+	map<pos,int> node_ids;
+	for (set<pos>::iterator sit=bps.begin(); sit!=bps.end(); sit++ ) {
+		num_nodes++;
+		node_ids[*sit]=num_nodes;
+	}
+	num_nodes*=2;
+	for (int i=1; i<=num_nodes; i++) {
+		ss << "n\t" << i << "\t0" << endl; 
+	}
+
+
+	//print the s and t edges
+	int arcs=0;
+	int zz=1;
+	int low=zz;
+	int cap=zz;
+	int cost=0;
+	ss << arc_strings(1,2,0,low,cap,cost);
+	arcs+=2;
+	ss << arc_strings(3,1,0,low,cap,cost);
+	//ss << "a\t3\t1\t" << low << "\t" << cap << "\t" << cost << endl;
+	arcs+=2;
+	for (int i=4; i<(num_nodes/2); i++) {
+		int low=0;
+		int cap=zz;
+		int cost=0;
+		ss << arc_strings(2,i,0,low,cap,cost);
+		//ss << "a\t2\t" << i << "\t" << low << "\t" << cap << "\t" << cost << endl;
+		arcs+=2;
+		ss << arc_strings(i,3,0,low,cap,cost);
+		//ss << "a\t" << i << "\t" << "3\t" << low << "\t" << cap << "\t" << cost << endl;
+		arcs+=2;
+	}
+	
+	ss << "c Here are the genomic edges" << endl;
+	for (map<edge,edge_info>::iterator mit = genomic_edges.begin(); mit!=genomic_edges.end(); mit++) {
+		const edge & e = mit->first;
+		edge_info & ei = mit->second;
+		if (node_ids.find(e.posa)==node_ids.end()) {
+			cerr << "Failed to find something ... " << endl;
+			exit(1);
+		}
+		if (node_ids.find(e.posb)==node_ids.end()) {
+			cerr << "Failed to find something ... " << endl;
+			exit(1);
+		}
+		for (int i=0; i<SZ; i++) {
+			int low=0;
+			int cap=1;
+			if (i>0) {
+				int cost=ei.scores[i]-ei.scores[i-1];
+				ss << arc_strings(node_ids[e.posa],node_ids[e.posb],0,low,cap,cost);
+				arcs+=2;
+			}
+		}
+		/*for (int i=0; i<SZ; i++) {
+			int low=0;
+			int cap=1;
+			int cost=0;
+			if (i>0) {
+				cost=ei.scores[i]-ei.scores[i-1];
+				ss << "a\t" << node_ids[e.posa] << "\t" << node_ids[e.posb] << "\t" << low << "\t" << cap << "\t" << cost << endl;  
+				arcs++;
+			}
+		}*/	
+	}
+
+	ss << "c Here are the somatic edges" << endl;	
+	for (map<edge,edge_info>::iterator mit = somatic_edges.begin(); mit!=somatic_edges.end(); mit++) {
+		const edge & e = mit->first;
+		edge_info & ei = mit->second;
+		if (node_ids.find(e.posa)==node_ids.end()) {
+			cerr << "Failed to find something ... " << endl;
+			exit(1);
+		}
+		if (node_ids.find(e.posb)==node_ids.end()) {
+			cerr << "Failed to find something ... " << endl;
+			exit(1);
+		}
+		for (int i=0; i<SZ; i++) {
+			int low=0;
+			int cap=1;
+			if (i>0) {
+				int cost=ei.scores[i]-ei.scores[i-1];
+				ss << arc_strings(node_ids[e.posa],node_ids[e.posb],ei.type,low,cap,cost);
+				arcs+=2;
+			}
+		}
+		/*char stranda='+';
+		char strandb='+';
+		if (ei.type==0 || ei.type==2) {
+			stranda='+';
+			if (ei.type==0) {
+				strandb='+';
+			} else {
+				strandb='-';
+			}
+		} else {
+			stranda='-';
+			if (ei.type==1) {
+				strandb='-';
+			} else {
+				strandb='+';
+			}
+		}
+		for (int i=0; i<SZ; i++) {
+			int low=0;
+			int cap=1;
+			int cost=0;
+			arcs+=2;
+			if (i>0) {
+				cost=ei.scores[i]-ei.scores[i-1];
+				ss << "a\t" << (stranda=='-' ? -1 : 1 )*node_ids[e.posa] << "\t" << (strandb=='-' ? -1 : 1 )*node_ids[e.posb] << "\t" << low << "\t" << cap << "\t" << cost << endl;  
+				arcs++;
+			}
+		}*/	
+	}
+		
+	cout << "c Here goes nothing ... " << endl;
+	cout << "p\tmin\t" << num_nodes << "\t" << arcs << endl;
+	cout << ss.str();
+
+	/*
+
 
 	//lets find a lower bound on the scores
 	double lower_bound=GENOMICW*get_lower_bound(genomic_edges)+SOMATICW*get_lower_bound(somatic_edges);
 	//first take the genomic
 	//then take the somatic			
-
 	walk w=walk(1);
 	cout << w.str() << endl;
-
+	
 	priority_queue<walk> pq; 
 	pq.push(w);
-
+	
 	walk best_walk=walk(1);
 	cerr << "Starting with walk score of " << best_walk.score() << " lower bound is " << lower_bound << endl;
 	
@@ -1092,13 +1250,13 @@ int main ( int argc, char ** argv) {
 		//check basic heuristic
 		for (unsigned int i=0; i<children.size(); i++) {
 			walk & c = children[i];
-			/*if (c.score()>-lower_bound) {
-				//skip it
-				dropped++;
-				//because even if we got all the negative edges perfect, score would be zero!
-			} else {
-				pq.push(c);
-			}*/
+			//if (c.score()>-lower_bound) {
+			//	//skip it
+			//	dropped++;
+			//	//because even if we got all the negative edges perfect, score would be zero!
+			//} else {
+			//	pq.push(c);
+			//}
 			pq.push(c);
 		}
 	
@@ -1133,7 +1291,7 @@ int main ( int argc, char ** argv) {
 	}
 	cout << "\t" << best_walk.str() << endl;
 	cout << "GENOMIC:"  << endl << edges_usage(genomic_edges,best_walk.used_edges,best_walk.best_cp()) << endl;
-	cout << "SOMATIC:"  << endl << edges_usage(somatic_edges,best_walk.used_edges,best_walk.best_cp()) << endl;
+	cout << "SOMATIC:"  << endl << edges_usage(somatic_edges,best_walk.used_edges,best_walk.best_cp()) << endl;*/
 
 	/*vector<walk> ws = w.successors();
 	ws=ws[0].successors();
