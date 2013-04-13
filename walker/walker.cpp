@@ -1360,7 +1360,7 @@ int main ( int argc, char ** argv) {
 	}
 
 	//now we just have the largest component left!
-	flow_solve(2);
+	flow_solve(3);
 
 	/*
 

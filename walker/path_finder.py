@@ -18,15 +18,29 @@ def print_graph(filename,flow_restriction={},extra=-1):
 		for t in edges[f]:
 			edges[f][t].sort()
 			flowr=len(edges[f][t])
-			if f in flow_restriction and t in flow_restriction[f]:
-				if flow_restriction[f][t]<flowr:
-					s=sum(map(lambda x : x[0],edges[f][t][flow_restriction[f][t]:flowr]))
-					#print >> sys.stderr, "Removing " , flowr-flow_restriction[f][t], " capacity from " , f , " to ", t , " - value " , s
-					sx+=s
-				flowr=min(flowr,flow_restriction[f][t])
-			for x in range(flowr):
-				score,low,cap = edges[f][t][x]
+			if f!=1:
+				if f in flow_restriction and t in flow_restriction[f]:
+					if flow_restriction[f][t]<flowr:
+						s=sum(map(lambda x : x[0],edges[f][t][flow_restriction[f][t]:flowr]))
+						if f==1:
+							print s
+						#print >> sys.stderr, "Removing " , flowr-flow_restriction[f][t], " capacity from " , f , " to ", t , " - value " , s
+						sx+=s
+					flowr=min(flowr,flow_restriction[f][t])
+				for x in range(flowr):
+					score,low,cap = edges[f][t][x]
+					arc_lines.append( "a\t%d\t%d\t%d\t%d\t%d" % (f,t,low,cap,score))
+			else:
+				if len(edges[f][t])!=1:
+					print >> sys.stderr, "Failed to process"
+					sys.exit(1)
+				score,low,cap = edges[f][t][0]
+				if f in flow_restriction and t in flow_restriction[f]:
+					#print flow_restriction[f][t]
+					low=min(low,flow_restriction[f][t])
+					cap=min(cap,flow_restriction[f][t])
 				arc_lines.append( "a\t%d\t%d\t%d\t%d\t%d" % (f,t,low,cap,score))
+				
 	if extra>0:
 		arc_lines.append( "a\t%d\t%d\t%d\t%d\t%d" % (3,extra,1,1,0))
 	h = open(filename,'w')
@@ -130,6 +144,9 @@ def search(t):
 	l,fl,path=t
 	#fname='/dev/shm/out_t'+str(os.getpid())
 	fname='out'
+	#ouc=print_graph(fname+"Y",fl,extra=path[-1])
+	#ofl,ocost=get_flow(fname+"Y")
+	
 	results=[]
 	#keep going until we dont hit the sink!
 	last_node = path[-1]
@@ -153,13 +170,23 @@ def search(t):
 		unused_cost=print_graph(fname,flr,extra=candidate)
 		#print path,candidate
 		local_fl,cost=get_flow(fname)
+		if last_node==3 or (len(path)>2 and path[-2]==3) or (len(path)>3 and path[-3]==3):
+			d=unused_cost-params['unused_cost']
+			print candidate,"cost:",cost,"cost+uc-param",cost+unused_cost-params['unused_cost'],"uc",unused_cost,params['cost']
+			print flr[last_node][candidate]
+			print path[-10:]
 		if cost<=0:
 			d=unused_cost-params['unused_cost']
 			#print cost,d,cost+d,params['cost']
 			if cost+d==params['cost']:
+				#if last_node==1:
+				#	print "passed!"
 				local_path=deepcopy(path)
 				local_path.append(candidate)
 				results.append((len(local_path),flr,local_path))
+			#if last_node==1:
+			#	print "decided!"
+			#	sys.exit(1)
 		else:
 			print >> sys.stderr, "ERROR !!!" , cost
 			sys.exit(1)
