@@ -68,7 +68,8 @@ class edge_info {
 		unsigned int normal;
 		unsigned int tumor;
 		int type;
-		int copy_number;
+		int hmm_copy_number;
+		int flow;
 		double scores[SZ];
 		void poisson();
 };
@@ -263,7 +264,8 @@ edge_info::edge_info() {
 	normal=0;
 	tumor=0;
 	type=5;
-	copy_number=-1;
+	hmm_copy_number=-1;
+	flow=0;
 	for (int i=0; i<SZ; i++) {
 		scores[i]=0;
 	}
@@ -471,7 +473,7 @@ void read_edges(char * filename) {
 			edge_info ei;
 			ei.length=length;
 			ei.type=0;
-			ei.copy_number=cp;
+			ei.hmm_copy_number=cp;
 
 			ei.normal=normal;
 			ei.tumor=tumor;
@@ -980,6 +982,18 @@ string edges_usage(map<edge,edge_info> & m, map<edge,int> & edges_used, int mx) 
 	return ss.str();
 }
 
+string edges_summary(map<edge,edge_info> & m) {
+	stringstream ss;
+	for (map<edge,edge_info>::iterator mit = m.begin(); mit!=m.end(); mit++) {
+		const edge & e = mit->first;
+		if (e!=e.canonical()) {
+			continue;
+		}
+		const edge_info & ei = mit->second;
+		ss << "(" << e.posa.str() << "," << e.posb.str() << " , hmm_cp: " << ei.hmm_copy_number << " flow: " << ei.flow  << " , cancer: " << ei.tumor << " , normal: " << ei.normal <<  " , ratio: " << ei.tumor/(1+ei.normal)  << endl;
+	}
+	return ss.str();
+}
 
 string arc_strings(int from_node, int to_node , int type, int low, int cap, int cost) {
 	stringstream ss;
@@ -1001,10 +1015,277 @@ string arc_strings(int from_node, int to_node , int type, int low, int cap, int 
 			strandb='+';
 		}
 	}
-	
-	ss << "a\t" << (stranda=='+' ? -1 : 0 )+2*from_node << "\t" << (strandb=='+' ? -1 : 0 )+2*to_node << "\t" << low << "\t" << cap << "\t" << cost << endl;  
-	ss << "a\t" << (strandb=='-' ? -1 : 0 )+2*to_node << "\t" << (stranda=='-' ? -1 : 0 )+2*from_node << "\t" << low << "\t" << cap << "\t" << cost << endl;  
+
+
+	if ( (to_node==2 && from_node!=1) || (from_node==3 && to_node!=1)) {
+		ss << "a\t" << (stranda=='+' ? -1 : 0 )+2*from_node << "\t" << (strandb=='+' ? -1 : 0 )+2*to_node << "\t" << 0 << "\t" << 0 << "\t" << cost << endl;  
+	} else {
+		ss << "a\t" << (stranda=='+' ? -1 : 0 )+2*from_node << "\t" << (strandb=='+' ? -1 : 0 )+2*to_node << "\t" << (to_node==2 ? low : 0) << "\t" << cap << "\t" << cost << endl; 
+	} 
+
+	if ((from_node==2 && to_node!=1) || (to_node==3 && from_node!=1)) {
+		ss << "a\t" << (strandb=='-' ? -1 : 0 )+2*to_node << "\t" << (stranda=='-' ? -1 : 0 )+2*from_node << "\t" << 0 << "\t" << 0 << "\t" << cost << endl;  
+	} else {
+		ss << "a\t" << (strandb=='-' ? -1 : 0 )+2*to_node << "\t" << (stranda=='-' ? -1 : 0 )+2*from_node << "\t" << (from_node==2 ? low : 0) << "\t" << cap << "\t" << cost << endl;  
+	}
 	return ss.str();
+}
+
+void add_flow_to_edge(pos posa,pos posb) {
+	//lets find the cheapeast way for this flow
+	double somatic_cost=10e100;
+	double genomic_cost=10e100;
+	
+	bool has_genomic=false;
+	edge ge = edge(posa,posb,true);
+	if (genomic_edges.find(ge)!=genomic_edges.end()) {
+		has_genomic=true;
+	}
+
+	bool has_somatic=false;
+	edge se = edge(posa,posb,false);
+	if (somatic_edges.find(se)!=somatic_edges.end()) {
+		has_somatic=true;
+	}
+
+	if (has_genomic) {
+		edge_info gei=genomic_edges[ge];
+		if ((gei.flow/2)<SZ-1) {
+			genomic_cost=gei.scores[gei.flow/2+1]-gei.scores[gei.flow/2];
+			//cout << "gflow is " << gei.flow << endl;
+			//cerr << "GEN COST " << genomic_cost << endl;
+		}
+	}
+
+	if(has_somatic) {
+		edge_info sei = somatic_edges[se];
+		if ((sei.flow/2)<SZ-1) {
+			somatic_cost=sei.scores[sei.flow/2+1]-sei.scores[sei.flow/2];
+			//cout << "sflow is " << sei.flow << endl;
+			//cerr << "SOM COST " << somatic_cost << endl;
+		}
+	}
+	
+	if (somatic_cost>10e99 && genomic_cost>10e99) {
+		//cerr << "SOMTHIGN BAD" << endl;	
+		cout << "OVERFLOW!\t" << posa.str() << "\t" << posb.str() << "\t" << (has_genomic ? genomic_edges[ge].flow : -1 ) << "\t" << (has_somatic ? somatic_edges[se].flow : -1 ) << endl;
+		
+		//exit(1);
+	} else {
+		if (somatic_cost<genomic_cost) {
+			somatic_edges[se].flow++;
+			somatic_edges[se.reverse()].flow++;
+		} else {
+			genomic_edges[ge].flow++;
+			genomic_edges[ge.reverse()].flow++;
+		}
+	}
+
+}
+
+void flow_solve(int contigs) {
+	cout << "Running flow with " << contigs << " contigs" << endl;
+	//output the graph!
+	stringstream ss;
+	int num_nodes=0;
+	map<pos,int> node_ids;
+	map<int,pos> inv_node_ids;
+
+	num_nodes++;
+	pos sourcea = pos(0,1);
+	node_ids[sourcea]=num_nodes;
+	inv_node_ids[num_nodes]=sourcea;
+
+	num_nodes++;
+	pos sourceb = pos(0,2);
+	node_ids[sourceb]=num_nodes;
+	inv_node_ids[num_nodes]=sourceb;
+
+	num_nodes++;
+	pos sink = pos(0,3);
+	node_ids[sink]=num_nodes;
+	inv_node_ids[num_nodes]=sink;
+
+	for (set<pos>::iterator sit=bps.begin(); sit!=bps.end(); sit++ ) {
+		num_nodes++;
+		node_ids[*sit]=num_nodes;
+		inv_node_ids[num_nodes]=*sit;
+	}
+	num_nodes*=2;
+	for (int i=1; i<=num_nodes; i++) {
+		ss << "c " << i << inv_node_ids[i].str() << endl;
+		ss << "n\t" << i << "\t0" << endl; 
+	}
+
+
+	//print the s and t edges
+	int arcs=0;
+	int low=contigs;
+	int cap=contigs;
+	int cost=0;
+	ss << arc_strings(1,2,0,low,cap,cost);
+	arcs+=2;
+	ss << arc_strings(3,1,0,0,cap,cost);
+	ss << arc_strings(3,1,1,0,cap,cost);
+	ss << arc_strings(3,1,2,0,cap,cost);
+	ss << arc_strings(3,1,3,0,cap,cost);
+	//ss << "a\t3\t1\t" << low << "\t" << cap << "\t" << cost << endl;
+	arcs+=8;
+	for (int i=4; i<(num_nodes/2); i++) {
+		int low=0;
+		//int cap=contigs;
+		int cost=0;
+		for (int j=0; j<contigs; j++ ){
+			int cap=1;
+			ss << arc_strings(2,i,0,low,cap,cost);
+			//ss << "a\t2\t" << i << "\t" << low << "\t" << cap << "\t" << cost << endl;
+			arcs+=2;
+			ss << arc_strings(i,3,0,low,cap,cost);
+			ss << arc_strings(i,3,1,low,cap,cost);
+			ss << arc_strings(i,3,2,low,cap,cost);
+			ss << arc_strings(i,3,3,low,cap,cost);
+			//ss << "a\t" << i << "\t" << "3\t" << low << "\t" << cap << "\t" << cost << endl;
+			arcs+=8;
+		}
+	}
+	
+	ss << "c Here are the genomic edges" << endl;
+	for (map<edge,edge_info>::iterator mit = genomic_edges.begin(); mit!=genomic_edges.end(); mit++) {
+		const edge & e = mit->first;
+		if (e!=e.canonical()) {
+			continue;
+		}
+		mit->second.flow=0;
+		edge_info & ei = mit->second;
+		if (node_ids.find(e.posa)==node_ids.end()) {
+			cerr << "Failed to find something ... " << endl;
+			exit(1);
+		}
+		if (node_ids.find(e.posb)==node_ids.end()) {
+			cerr << "Failed to find something ... " << endl;
+			exit(1);
+		}
+		for (int i=0; i<SZ; i++) {
+			int low=0;
+			int cap=1;
+			if (i>0) {
+				int cost=ei.scores[i]-ei.scores[i-1];
+				ss << "c Genomic\t" << e.posa.str() << "\t" << e.posb.str() << endl;
+				ss << arc_strings(node_ids[e.posa],node_ids[e.posb],0,low,cap,cost);
+				arcs+=2;
+			}
+		}
+	}
+
+	ss << "c Here are the somatic edges" << endl;	
+	for (map<edge,edge_info>::iterator mit = somatic_edges.begin(); mit!=somatic_edges.end(); mit++) {
+		const edge & e = mit->first;
+		if (e!=e.canonical()) {
+			continue;
+		}
+		mit->second.flow=0;
+		edge_info & ei = mit->second;
+		if (node_ids.find(e.posa)==node_ids.end()) {
+			cerr << "Failed to find something ... " << endl;
+			exit(1);
+		}
+		if (node_ids.find(e.posb)==node_ids.end()) {
+			cerr << "Failed to find something ... " << endl;
+			exit(1);
+		}
+		for (int i=0; i<SZ; i++) {
+			int low=0;
+			int cap=1;
+			if (i>0) {
+				int cost=ei.scores[i]-ei.scores[i-1];
+				ss << "c Somatic\t" << e.posa.str() << "\t" << e.posb.str() << endl;
+				ss << arc_strings(node_ids[e.posa],node_ids[e.posb],ei.type,low,cap,cost);
+				arcs+=2;
+			}
+		}
+	}
+	
+
+	//open the problem file
+	ofstream fs ("./problem_file");
+	fs << "c Here goes nothing ... " << endl;
+	fs << "p\tmin\t" << num_nodes << "\t" << arcs << endl;
+	fs << ss.str();
+	fs.close();
+
+	//run cs2.exe on it
+	FILE *fp;
+	int status;
+	
+	/* Open the command for reading. */
+	fp = popen("cat ./problem_file | cs2.exe", "r");
+	if (fp == NULL) {
+		printf("Failed to run cs2.exe command\n" );
+		exit(1);
+	}
+
+	/* Read the output a line at a time - output it. */
+	char buffer[1035];
+	while (fgets(buffer, sizeof(buffer)-1, fp) != NULL) {
+		printf("SOLUTION %s", buffer);
+		switch(buffer[0]) {
+			case 'c':
+				cout << buffer;
+				break;
+			case 's':
+				break;
+			case 'f':
+				int from,to,ret,f,fromb,tob;
+	 			ret = sscanf(buffer,"f\t%d\t%d\t%d\n",&from,&to,&f);
+				if (ret!=3) {
+					cerr << "Failed to parse flow output " << endl;
+					exit(1);
+				}
+				fromb=(1+from)/2;
+				tob=(1+to)/2;
+				if ( (fromb>3 && inv_node_ids.find(fromb)==inv_node_ids.end()) || (tob>3 && inv_node_ids.find(tob)==inv_node_ids.end() )) {
+					cerr << "Failed to inverse lookup flow nodes " << endl;
+					exit(1);
+				}
+
+				//it actual genomic or somatic edge
+				if (f>0 && fromb>3 && tob>3) {
+					//if ( (tob==58 && fromb==47) || (tob==47 && fromb==58) ) {
+						//printf("%s", buffer);
+						if (f>1) {
+							cerr << "only expecting unit flow!" << endl;
+							exit(1);
+						}
+						pos posa = inv_node_ids[fromb];
+						pos posb = inv_node_ids[tob];
+						//cout << posa.str() << "\t" << from << "\t" << posb.str() << "\t" << to << endl;
+						add_flow_to_edge(posa,posb);
+					//}
+				}
+				break;
+			default:
+				cerr << "failed o hhandl this " << endl;
+				exit(1);
+		}
+	}
+
+	//correct the flow counts
+	for (map<edge,edge_info>::iterator mit=genomic_edges.begin(); mit!=genomic_edges.end(); mit++) {
+		mit->second.flow/=2;
+	}
+	for (map<edge,edge_info>::iterator mit=somatic_edges.begin(); mit!=somatic_edges.end(); mit++) {
+		mit->second.flow/=2;
+	}
+	
+	cout << "GENOMIC" << endl;
+	cout << edges_summary(genomic_edges);
+	
+	cout << "SOMATIC" << endl;
+	cout << edges_summary(somatic_edges);
+
+	/* close */
+	pclose(fp);
+
 }
 
 int main ( int argc, char ** argv) {
@@ -1079,132 +1360,7 @@ int main ( int argc, char ** argv) {
 	}
 
 	//now we just have the largest component left!
-
-	stringstream ss;
-
-	//output the graph!
-	int num_nodes = 3; // source1, source2, sink, rest
-	map<pos,int> node_ids;
-	for (set<pos>::iterator sit=bps.begin(); sit!=bps.end(); sit++ ) {
-		num_nodes++;
-		node_ids[*sit]=num_nodes;
-	}
-	num_nodes*=2;
-	for (int i=1; i<=num_nodes; i++) {
-		ss << "n\t" << i << "\t0" << endl; 
-	}
-
-
-	//print the s and t edges
-	int arcs=0;
-	int zz=1;
-	int low=zz;
-	int cap=zz;
-	int cost=0;
-	ss << arc_strings(1,2,0,low,cap,cost);
-	arcs+=2;
-	ss << arc_strings(3,1,0,low,cap,cost);
-	//ss << "a\t3\t1\t" << low << "\t" << cap << "\t" << cost << endl;
-	arcs+=2;
-	for (int i=4; i<(num_nodes/2); i++) {
-		int low=0;
-		int cap=zz;
-		int cost=0;
-		ss << arc_strings(2,i,0,low,cap,cost);
-		//ss << "a\t2\t" << i << "\t" << low << "\t" << cap << "\t" << cost << endl;
-		arcs+=2;
-		ss << arc_strings(i,3,0,low,cap,cost);
-		//ss << "a\t" << i << "\t" << "3\t" << low << "\t" << cap << "\t" << cost << endl;
-		arcs+=2;
-	}
-	
-	ss << "c Here are the genomic edges" << endl;
-	for (map<edge,edge_info>::iterator mit = genomic_edges.begin(); mit!=genomic_edges.end(); mit++) {
-		const edge & e = mit->first;
-		edge_info & ei = mit->second;
-		if (node_ids.find(e.posa)==node_ids.end()) {
-			cerr << "Failed to find something ... " << endl;
-			exit(1);
-		}
-		if (node_ids.find(e.posb)==node_ids.end()) {
-			cerr << "Failed to find something ... " << endl;
-			exit(1);
-		}
-		for (int i=0; i<SZ; i++) {
-			int low=0;
-			int cap=1;
-			if (i>0) {
-				int cost=ei.scores[i]-ei.scores[i-1];
-				ss << arc_strings(node_ids[e.posa],node_ids[e.posb],0,low,cap,cost);
-				arcs+=2;
-			}
-		}
-		/*for (int i=0; i<SZ; i++) {
-			int low=0;
-			int cap=1;
-			int cost=0;
-			if (i>0) {
-				cost=ei.scores[i]-ei.scores[i-1];
-				ss << "a\t" << node_ids[e.posa] << "\t" << node_ids[e.posb] << "\t" << low << "\t" << cap << "\t" << cost << endl;  
-				arcs++;
-			}
-		}*/	
-	}
-
-	ss << "c Here are the somatic edges" << endl;	
-	for (map<edge,edge_info>::iterator mit = somatic_edges.begin(); mit!=somatic_edges.end(); mit++) {
-		const edge & e = mit->first;
-		edge_info & ei = mit->second;
-		if (node_ids.find(e.posa)==node_ids.end()) {
-			cerr << "Failed to find something ... " << endl;
-			exit(1);
-		}
-		if (node_ids.find(e.posb)==node_ids.end()) {
-			cerr << "Failed to find something ... " << endl;
-			exit(1);
-		}
-		for (int i=0; i<SZ; i++) {
-			int low=0;
-			int cap=1;
-			if (i>0) {
-				int cost=ei.scores[i]-ei.scores[i-1];
-				ss << arc_strings(node_ids[e.posa],node_ids[e.posb],ei.type,low,cap,cost);
-				arcs+=2;
-			}
-		}
-		/*char stranda='+';
-		char strandb='+';
-		if (ei.type==0 || ei.type==2) {
-			stranda='+';
-			if (ei.type==0) {
-				strandb='+';
-			} else {
-				strandb='-';
-			}
-		} else {
-			stranda='-';
-			if (ei.type==1) {
-				strandb='-';
-			} else {
-				strandb='+';
-			}
-		}
-		for (int i=0; i<SZ; i++) {
-			int low=0;
-			int cap=1;
-			int cost=0;
-			arcs+=2;
-			if (i>0) {
-				cost=ei.scores[i]-ei.scores[i-1];
-				ss << "a\t" << (stranda=='-' ? -1 : 1 )*node_ids[e.posa] << "\t" << (strandb=='-' ? -1 : 1 )*node_ids[e.posb] << "\t" << low << "\t" << cap << "\t" << cost << endl;  
-				arcs++;
-			}
-		}*/	
-	}
-		
-	cout << "c Here goes nothing ... " << endl;
-	cout << "p\tmin\t" << num_nodes << "\t" << arcs << endl;
-	cout << ss.str();
+	flow_solve(1);
 
 	/*
 
