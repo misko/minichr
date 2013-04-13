@@ -14,7 +14,7 @@
 #include <string.h>
 #include <limits>
 
-#define	SZ	50	//max ocpy count
+#define	SZ	100	//max ocpy count
 #define MAX_WALK	180
 #define MAX_REUSE	2
 #define MIN_CP	1
@@ -1017,13 +1017,13 @@ string arc_strings(int from_node, int to_node , int type, int low, int cap, int 
 	}
 
 
-	if ( (to_node==2 && from_node!=1) || (from_node==3 && to_node!=1)) {
+	if ( (to_node==2 && from_node!=1) || (from_node==3 && to_node!=1) || (from_node==1 && to_node!=2)) {
 		ss << "a\t" << (stranda=='+' ? -1 : 0 )+2*from_node << "\t" << (strandb=='+' ? -1 : 0 )+2*to_node << "\t" << 0 << "\t" << 0 << "\t" << cost << endl;  
 	} else {
 		ss << "a\t" << (stranda=='+' ? -1 : 0 )+2*from_node << "\t" << (strandb=='+' ? -1 : 0 )+2*to_node << "\t" << (to_node==2 ? low : 0) << "\t" << cap << "\t" << cost << endl; 
 	} 
 
-	if ((from_node==2 && to_node!=1) || (to_node==3 && from_node!=1)) {
+	if ((from_node==2 && to_node!=1) || (to_node==3 && from_node!=1) || (to_node==1 && from_node!=2)) {
 		ss << "a\t" << (strandb=='-' ? -1 : 0 )+2*to_node << "\t" << (stranda=='-' ? -1 : 0 )+2*from_node << "\t" << 0 << "\t" << 0 << "\t" << cost << endl;  
 	} else {
 		ss << "a\t" << (strandb=='-' ? -1 : 0 )+2*to_node << "\t" << (stranda=='-' ? -1 : 0 )+2*from_node << "\t" << (from_node==2 ? low : 0) << "\t" << cap << "\t" << cost << endl;  
@@ -1141,11 +1141,11 @@ void flow_solve(int contigs) {
 			//ss << "a\t2\t" << i << "\t" << low << "\t" << cap << "\t" << cost << endl;
 			arcs+=2;
 			ss << arc_strings(i,3,0,low,cap,cost);
-			ss << arc_strings(i,3,1,low,cap,cost);
-			ss << arc_strings(i,3,2,low,cap,cost);
-			ss << arc_strings(i,3,3,low,cap,cost);
+			//ss << arc_strings(i,3,1,low,cap,cost);
+			//ss << arc_strings(i,3,2,low,cap,cost);
+			//ss << arc_strings(i,3,3,low,cap,cost);
 			//ss << "a\t" << i << "\t" << "3\t" << low << "\t" << cap << "\t" << cost << endl;
-			arcs+=8;
+			arcs+=2;
 		}
 	}
 	
@@ -1227,7 +1227,7 @@ void flow_solve(int contigs) {
 	/* Read the output a line at a time - output it. */
 	char buffer[1035];
 	while (fgets(buffer, sizeof(buffer)-1, fp) != NULL) {
-		printf("SOLUTION %s", buffer);
+		//printf("SOLUTION %s", buffer);
 		switch(buffer[0]) {
 			case 'c':
 				cout << buffer;
@@ -1360,7 +1360,7 @@ int main ( int argc, char ** argv) {
 	}
 
 	//now we just have the largest component left!
-	flow_solve(1);
+	flow_solve(2);
 
 	/*
 

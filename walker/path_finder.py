@@ -60,6 +60,7 @@ def get_flow(problem_filename):
 
 def read_graph(x):
 	#expect graph
+	walks=0
 	for line in x:
 		if line[0]=='c':
 			#comment, essentially skip
@@ -73,6 +74,7 @@ def read_graph(x):
 			f=int(line[1])
 			t=int(line[2])
 			low=int(line[3])
+			walks=max(walks,low)
 			cap=int(line[4])
 			score=int(line[5])
 			if f not in edges:
@@ -85,6 +87,7 @@ def read_graph(x):
 			line=line.split()
 			params['num_nodes']=int(line[2])
 			params['num_arcs']=int(line[3])
+	return walks
 
 def get_candidates(last_node,flow):
 	r=[]
@@ -130,11 +133,11 @@ def search(t):
 	results=[]
 	#keep going until we dont hit the sink!
 	last_node = path[-1]
-	if last_node==5 or last_node==6:
+	if (last_node==5 or last_node==6) and params['walks']==(path.count(5)+path.count(6)):
 		unused_cost=print_graph(fname,fl,extra=last_node)
 		local_fl,cost=get_flow(fname)
-		print "DONE!",params['mins'],params['cost'],cost,unused_cost,len(path)
-		#print "Search ... " , path[-10:]
+		print "DONE!",params['walks'],params['mins'],params['cost'],cost,unused_cost,len(path)
+		print "Search ... " , path[-10:]
 		if cost==0:
 			params['mins']+=1
 		return results
@@ -157,6 +160,9 @@ def search(t):
 				local_path=deepcopy(path)
 				local_path.append(candidate)
 				results.append((len(local_path),flr,local_path))
+		else:
+			print >> sys.stderr, "ERROR !!!" , cost
+			sys.exit(1)
 	return results
 	#for result in results:
 	#	local_flr=deepcopy(fl)
@@ -167,7 +173,8 @@ def search(t):
 	#	search(local_flr,local_path)
 	
 
-read_graph(sys.stdin)
+params['walks']=read_graph(sys.stdin)
+
 tflow=setup()
 
 #p = Pool(32)
