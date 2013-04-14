@@ -6,9 +6,13 @@ from copy import deepcopy
 import random
 from multiprocessing import Pool
 
+import time
+
+
 params={'num_nodes':0,'k':0,'cost':0,'mins':0}
 edges={}
 
+pid=os.getpid()
 
 #provide extra edge to location from node 3
 def print_graph(filename,flow_restriction={},extra=-1):
@@ -70,6 +74,7 @@ def get_flow(problem_filename):
 				if t not in fld[f]:
 					fld[f][t]=0
 				fld[f][t]+=fl
+	stream.close()
 	return fld,cost
 
 def read_graph(x):
@@ -111,24 +116,26 @@ def get_candidates(last_node,flow):
 			if flow[last_node][to_node]>0:
 				r.append(to_node)
 	#print "Finding candidates for " , last_node,r
+	random.shuffle(r)
 	return r
 
 
 
 def setup():
 	#lets get the original cost
-	print_graph('out')
-	flow,cost=get_flow('out')
+	fname='out_%d' % pid
+	print_graph(fname)
+	flow,cost=get_flow(fname)
 	params['cost']=cost
 
 	#remove unused edges
-	unused_cost=print_graph('out',flow)
-	flow,cost=get_flow('out')
+	unused_cost=print_graph(fname,flow)
+	flow,cost=get_flow(fname)
 	if cost!=params['cost']:
 		cerr << "FATAL"
 		sys.exit(1)
-	unused_cost=print_graph('out',flow)
-	flow,cost=get_flow('out')
+	unused_cost=print_graph(fname,flow)
+	flow,cost=get_flow(fname)
 	if cost!=params['cost']:
 		cerr << "FATAL"
 		sys.exit(1)
@@ -143,7 +150,7 @@ def setup():
 def search(t):
 	l,fl,path=t
 	#fname='/dev/shm/out_t'+str(os.getpid())
-	fname='out'
+	fname='/dev/shm/out_%d' % pid
 	#ouc=print_graph(fname+"Y",fl,extra=path[-1])
 	#ofl,ocost=get_flow(fname+"Y")
 	
@@ -153,11 +160,12 @@ def search(t):
 	if (last_node==5 or last_node==6) and params['walks']==(path.count(5)+path.count(6)):
 		unused_cost=print_graph(fname,fl,extra=last_node)
 		local_fl,cost=get_flow(fname)
-		print "DONE!",params['walks'],params['mins'],params['cost'],cost,unused_cost,len(path)
-		print "Search ... " , path[-10:]
+		#print >> sys.stderr, "DONE!",params['walks'],params['mins'],params['cost'],cost,unused_cost,len(path)
 		if cost==0:
+			print "Search ... " , path
 			params['mins']+=1
-		return results
+			return results,True
+		return results,False
 	candidates=get_candidates(last_node,fl)
 	for candidate in candidates:
 		flr=deepcopy(fl)
@@ -172,9 +180,9 @@ def search(t):
 		local_fl,cost=get_flow(fname)
 		if last_node==3 or (len(path)>2 and path[-2]==3) or (len(path)>3 and path[-3]==3):
 			d=unused_cost-params['unused_cost']
-			print candidate,"cost:",cost,"cost+uc-param",cost+unused_cost-params['unused_cost'],"uc",unused_cost,params['cost']
-			print flr[last_node][candidate]
-			print path[-10:]
+			#print candidate,"cost:",cost,"cost+uc-param",cost+unused_cost-params['unused_cost'],"uc",unused_cost,params['cost']
+			#print flr[last_node][candidate]
+			#print path[-10:]
 		if cost<=0:
 			d=unused_cost-params['unused_cost']
 			#print cost,d,cost+d,params['cost']
@@ -190,7 +198,7 @@ def search(t):
 		else:
 			print >> sys.stderr, "ERROR !!!" , cost
 			sys.exit(1)
-	return results
+	return results,False
 	#for result in results:
 	#	local_flr=deepcopy(fl)
 	#	local_flr[last_node][result]-=1
@@ -206,19 +214,28 @@ tflow=setup()
 
 #p = Pool(32)
 
-q=[(1,tflow,[3])]
-while len(q)>0:
-	#q.sort()
-	#qtop=[]
-	#for x in range(min(32*3,len(q))):
-	#	i=int((0.7+0.3*random.random()) * len(q))	
-	#	qtop.append(q.pop(i))
-	#tresults=p.map(search,qtop)
-	#for rt in tresults:
-	#	for result in rt:
-	#		q.append(result)
-	#
-	#i=int(random.random() * len(q))
-	tpl=q.pop()
-	for result in search(tpl):
-		q.append(result)
+def look(start,end):
+	q=[(1,tflow,[3])]
+	while len(q)>0:
+		tpl=q.pop()
+		results,d = search(tpl)
+		if d or time.time()>end:
+			return
+		for result in results:
+			q.append(result)
+
+
+origin_time = time.time()
+max_time=60*60
+
+d=900
+while True:
+	start = time.time()
+	look(start,start+d)
+	if time.time()<start+d:
+		#found a solution
+		print >> sys.stderr, "FOUND A SOLUTION"
+	else:
+		#didnt find one
+		d=int(d*1.2)
+	print >> sys.stderr, "Restarting with ", d
