@@ -108,24 +108,54 @@ def annotate_path(p):
 					used[c]['somatic']+=1
 	return used,path
 
+
+def canonical_loop(l):
+	if len(l)==0:
+		return l
+	mn=min(l)
+	ix=l.index(mn)
+	return tuple(l[ix:]+l[:ix])
+
+def loops_in_path(p):
+	loops=set()
+	p_so_far=[]
+	for x in p:
+		if x<=6:
+			p_so_far=[]
+		try:
+			ix=p_so_far.index(x)
+			#found a copy
+			loop=p_so_far[ix:]
+			p_so_far=p_so_far[:ix]
+			#rotate list to min start
+			loops.add(canonical_loop(loop))
+		except ValueError:
+			p_so_far.append(x)
+	return loops
+			
+
 def read_paths_file(filename):
-	p=[]
+	all_loops=set()
 	h=open(filename,'r')
 	for line in h:
 		if line.find('Search ... ')==0:
-			p=eval(line.replace('Search ... ',''))
+			try:
+				p=eval(line.replace('Search ... ',''))
+				p_loops=loops_in_path(p)
+				print len(all_loops)
+				x = p_loops.difference(all_loops)
+				all_loops=all_loops.union(p_loops)
+				#print "\n".join(map(str,x))
+			except:
+				pass
 	h.close()
+	return
 	if len(p)!=0:
 		#break up the paths
-		sub_paths=[]
-		sub_path=[]
-		for x in p:
-			if x<=6:
-				if len(sub_path)>0:
-					sub_paths.append(sub_path)
-					sub_path=[]
-			else:
-				sub_path.append(x)
+		loops=loops_in_path(p)
+		return loops
+		print "\n".join(map(str,sub_paths))
+		sys.exit(1)
 		#annotate each path
 		for sub_path in sub_paths:
 			print "# " + filename + " subpath_len" , len(sub_path)
@@ -144,7 +174,7 @@ def read_paths_file(filename):
 					u=used[(f,t)]['somatic']*scale
 				l_somatic_edges.append((f,t,somatic_edges[(f,t)][0][2],u))
 			print l_somatic_edges
-	return p
+	return None
 
 problem_filename=sys.argv[1]
 paths_filename=sys.argv[2]

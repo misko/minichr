@@ -147,15 +147,19 @@ for posa,posb in genomic_edges:
 		Gx.add_edge(posa,posb,weight='1')
 		xgenomic_edges.append((posa,posb))
 
+
+
+import matplotlib.pyplot as plt
+pos=nx.spring_layout(Gx) # positions for all nodes
+
+print pos
+
+
 xcluster_edges=[]
 for posa,posb in cluster_edges:
 	if (posa in nodes) and (posb in nodes):
 		Gx.add_edge(posa,posb,weight='1')
 		xcluster_edges.append((posa,posb))
-
-
-import matplotlib.pyplot as plt
-pos=nx.spring_layout(Gx) # positions for all nodes
 
 # nodes
 print pos
@@ -163,7 +167,7 @@ nx.draw_networkx_nodes(Gx,pos)
 labels={}
 for node in nodes:
 	labels[node]=str(node)
-nx.draw_networkx_labels(G,pos,labels,font_size=12)
+	nx.draw_networkx_labels(G,pos,labels,font_size=12)
 
 for posa,posb in xgenomic_edges:
 	cp=5+genomic_edges[(posa,posb)]['cancer']/(1+genomic_edges[(posa,posb)]['lmbda'])
@@ -171,7 +175,6 @@ for posa,posb in xgenomic_edges:
 	                       edgelist=[(posa,posb)],
 	                       width=cp/2,alpha=0.5,edge_color='r')
 for posa,posb in xcluster_edges:
-	
 	nx.draw_networkx_edges(Gx,pos,
 	                       edgelist=[(posa,posb)],
 	                       width=cluster_edges[(posa,posb)]['support']/2+2.5,alpha=0.5,edge_color='b')
@@ -188,7 +191,7 @@ for posa,posb in xcluster_edges:
 
 
 #nx.draw_spring(Gx)
-plt.show()
+#plt.show()
 plt.savefig('graph.png')
 
 

@@ -237,5 +237,6 @@ while True:
 		print >> sys.stderr, "FOUND A SOLUTION"
 	else:
 		#didnt find one
-		d=int(d*1.2)
+		#d=int(d*1.2)
+		pass
 	print >> sys.stderr, "Restarting with ", d

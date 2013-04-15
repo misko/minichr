@@ -1113,7 +1113,7 @@ void flow_solve(int contigs) {
 	}
 	num_nodes*=2;
 	for (int i=1; i<=num_nodes; i++) {
-		ss << "c " << i << inv_node_ids[i].str() << endl;
+		ss << "c NODE " << i << " " << inv_node_ids[(i+1)/2].str() << endl;
 		ss << "n\t" << i << "\t0" << endl; 
 	}
 
@@ -1170,7 +1170,7 @@ void flow_solve(int contigs) {
 			int cap=1;
 			if (i>0) {
 				int cost=ei.scores[i]-ei.scores[i-1];
-				ss << "c Genomic\t" << e.posa.str() << "\t" << e.posb.str() << endl;
+				ss << "c Genomic\t" << e.posa.str() << "\t" << e.posb.str()  << "\t" << cost << endl;
 				ss << arc_strings(node_ids[e.posa],node_ids[e.posb],0,low,cap,cost);
 				arcs+=2;
 			}
@@ -1198,7 +1198,7 @@ void flow_solve(int contigs) {
 			int cap=1;
 			if (i>0) {
 				int cost=ei.scores[i]-ei.scores[i-1];
-				ss << "c Somatic\t" << e.posa.str() << "\t" << e.posb.str() << endl;
+				ss << "c Somatic\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << ei.type << "\t" << cost << endl;
 				ss << arc_strings(node_ids[e.posa],node_ids[e.posb],ei.type,low,cap,cost);
 				arcs+=2;
 			}
@@ -1289,14 +1289,15 @@ void flow_solve(int contigs) {
 }
 
 int main ( int argc, char ** argv) {
-	if (argc!=4) {
-		cerr << argv[0] << " links bp_coverages edges " << endl;
+	if (argc!=5) {
+		cerr << argv[0] << " links bp_coverages edges flow" << endl;
 		exit(1);
 	}
 	
 	char * links_filename = argv[1];
 	char * bp_coverages_filename = argv[2];
 	char * edges_filename = argv[3];
+	int flow = atoi(argv[4]);
 
 
 	read_edges(edges_filename);
@@ -1360,7 +1361,8 @@ int main ( int argc, char ** argv) {
 	}
 
 	//now we just have the largest component left!
-	flow_solve(3);
+	cerr << "SOLVING FLOW FOR " << flow << endl;
+	flow_solve(flow);
 
 	/*
 
