@@ -226,7 +226,7 @@ def look(start,end):
 
 
 origin_time = time.time()
-max_time=60*60
+max_time=60*60*60
 
 d=900
 while True:

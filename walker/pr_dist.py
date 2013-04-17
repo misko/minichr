@@ -140,6 +140,7 @@ def pr(pf,pt,pl,paths):
 	s=0
 	for path in paths:
 		last=-1
+		added=set()
 		#does the forward looking pass
 		for x in range(1,len(path)):
 			f=path[x-1]
@@ -160,8 +161,12 @@ def pr(pf,pt,pl,paths):
 						z=tuple(path[x-1-last:x+1])
 						if z not in d:
 							d[z]=0
-						d[z]+=1
-						s+=1
+						if z not in added:
+							d[z]+=1
+						#d[z]+=1
+						#s+=1
+		s+=1
+	print s,d
 	dist={}
 	mx=0
 	for z in d:
@@ -269,9 +274,9 @@ def read_paths_file(filename,output_folder):
 					e.add((f,t))
 				#edges=edges.union(e)
 				edges.update(e)
-				if len(paths)>10:
-					print >> sys.stderr, " ONLYF IRST 50 paths"
-					break
+				#if len(paths)>1000:
+				#	print >> sys.stderr, " ONLYF IRST 50 paths"
+				#	break
 	h.close()
 
 
@@ -280,13 +285,14 @@ def read_paths_file(filename,output_folder):
 	#base settings
 	slack=1
 	#edges=set([(116, 94)])
-	#edges=set([(63,65),(103,105)])
+	#edges=set([(63,65)])
+	#edges=set([(66,64)])
 	#now for each edge
 	for f,t in edges:
 		l=1
 		p_cutoff=0.999
 		x=slack
-		last=set()
+		#last=set()
 		while x>0:
 			dist,mx=pr(f,t,l,paths)
 			#print dist
@@ -294,12 +300,15 @@ def read_paths_file(filename,output_folder):
 				x-=1
 			else:
 				x=slack
-				last=dist.keys()
+				for z in dist:
+					if dist[z]>=p_cutoff:
+						solid_paths.add(z)
+				#last=dist.keys()
 			l+=1
 		#print last
 		#print last
 		#solid_paths=solid_paths.union(last)
-		solid_paths.update(last)
+		#solid_paths.update(last)
 	solid_paths=reduce_solid_paths(solid_paths)
 	path_id=0
 	for path in solid_paths:

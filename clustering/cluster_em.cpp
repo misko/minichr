@@ -1101,7 +1101,7 @@ int main( int argc, char ** argv) {
 		//}		
 	}
 
-	cerr << "27: " << t27 << endl;
+	//cerr << "27: " << t27 << endl;
 	
 	return 0;
 }

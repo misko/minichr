@@ -129,14 +129,14 @@ def read_flow_file(filename):
 	for f,t in genomic_edges:
 		u=0
 		if (f,t) in used:
-			u=used[(f,t)]['genomic']*scale
+			u=int(used[(f,t)]['genomic']*scale)
 		l_genomic_edges.append((f,t,0,u))	
 	print l_genomic_edges
 	l_somatic_edges=[]
 	for f,t in somatic_edges:
 		u=0
 		if (f,t) in used:
-			u=used[(f,t)]['somatic']*scale
+			u=int(used[(f,t)]['somatic']*scale)
 		l_somatic_edges.append((f,t,somatic_edges[(f,t)][0][2],u))
 	print l_somatic_edges
 
