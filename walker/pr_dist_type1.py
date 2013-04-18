@@ -161,12 +161,12 @@ def pr(pf,pt,pl,paths):
 						z=tuple(path[x-1-last:x+1])
 						if z not in d:
 							d[z]=0
-						if z not in added:
-							d[z]+=1
-							added.add(z)
-						#d[z]+=1
-						#s+=1
-		s+=1
+						#if z not in added:
+						#	d[z]+=1
+						#	added.add(z)
+						d[z]+=1
+						s+=1
+		#s+=1
 	print s,d
 	dist={}
 	mx=0
