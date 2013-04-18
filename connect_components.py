@@ -131,6 +131,8 @@ for component in components:
 		s_components.append((len(component),component))
 s_components.sort(reverse=True)
 
+print s_components[-3:]
+
 nodes=set()
 for component in s_components[:1]:
 	for node in component[1]:
