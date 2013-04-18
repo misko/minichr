@@ -1306,6 +1306,7 @@ int main ( int argc, char ** argv) {
 
 	map<pos,int> connected_components = find_connected_components();
 	map<int, int> connected_components_sizes;
+	int size_3_or_more=0;
 	for (map<pos,int>::iterator mit = connected_components.begin(); mit!=connected_components.end(); mit++) {
 		connected_components_sizes[mit->second]++;	
 	}
@@ -1313,7 +1314,12 @@ int main ( int argc, char ** argv) {
 	//lets find the max comopnent and look at that
 	int max_id=-1;
 	int max=-1;
+	map<int, int> sizes;
 	for (map<int, int>::iterator mit = connected_components_sizes.begin(); mit!=connected_components_sizes.end(); mit++) {
+		if (mit->second>2) {
+			size_3_or_more++;
+		}
+		sizes[mit->second]+=1;
 		if (mit->second>max) {
 			max_id=mit->first;
 			max=mit->second;
@@ -1326,7 +1332,11 @@ int main ( int argc, char ** argv) {
 	}
 
 	cout << "c SOMATICW: " << SOMATICW << "\t" << "GENOMICW: " << GENOMICW << endl;
-
+	cerr << "Found " << connected_components_sizes.size() << " connected components, >2 " << size_3_or_more <<  endl;
+	for (map<int,int>::iterator mit = sizes.begin(); mit!=sizes.end(); mit++) {
+		cerr << "SZ: " << mit->first << " " << mit->second << endl;
+	}
+	//exit(1);
 	cerr << "Considering max component of size " << max << " id " << max_id << endl;
 
 	//drop everything but this component
