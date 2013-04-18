@@ -145,6 +145,7 @@ problem_filename=sys.argv[1]
 flow_filename=sys.argv[2]
 scale=float(sys.argv[3])
 
+
 read_problem_file(problem_filename)
 #read_paths_file(paths_filename)
 read_flow_file(flow_filename)
