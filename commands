@@ -22,3 +22,6 @@ cat dipg29t/n3t10_nocentro_refined_arc_bounded | head -n 2 | awk '{x=$3; y=$6; i
 
 
 cat  /dupa-filer/misko/dipg29t/n3t10_nocentro_refined | sed 's/\(chr[^:]*\):\([0-9]*\)\([+-]\)\s\(chr[^:]*\):\([0-9]*\)\([+-]\)/\1\t\2\t\3\t\4\t\5\t\6/g' | awk '{OFS="\t"; type=0; if ($3=="+") {if ($6=="+") {type=0} else {type=2} } else { if ($6=="+") {type=3} else {type=1} }; print $1,$2,$5,type,$7,0,0,0.0,0,$4,"EDGE" }'
+
+
+ a=0; for x in data_x*.svg; do /Applications/Inkscape.app/Contents/Resources/bin/inkscape --export-png  type1_$a.png --export-background=white $x; a=`expr $a + 1`; done
