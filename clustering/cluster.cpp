@@ -14,6 +14,9 @@ using namespace std;
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
+#define FAR_AWAY	50000
+#define MIN_CLUSTER_SIZE	3
+
 #define UNMAPPED	0x4
 #define M_UNMAPPED	0x8
 #define REVERSE		0x10
@@ -27,7 +30,7 @@ using namespace std;
 
 #define THREADS	6
 
-#define READ_SIZE	10000
+#define READ_SIZE	100000
 
 
 class pos {
@@ -234,6 +237,46 @@ unsigned int cigar_len(const char * s, bool * sharp) {
 }
 
 
+bool much_smaller(const pos & a, const pos & b) {
+	if (a.chr<b.chr) {
+		return true;
+	}
+	if (a.chr>b.chr) {
+		return false;	
+	}
+	if (b.coord > a.coord + FAR_AWAY) {
+		return true;
+	}
+	return false;
+}
+
+void clean_clusters(pos max_pos) {
+	//go over all the clusters and take out the ones that can't get more support and are very weak
+	set< pair< pos , pos > > to_remove;
+	for (map<pos , map<pos, cluster> >::iterator mmit=clusters.begin(); mmit!=clusters.end(); mmit++) {
+		const pos & first_pos = mmit->first;
+		bool first_smaller = much_smaller(first_pos,max_pos);
+		for (map<pos, cluster>::iterator mit=clusters[first_pos].begin(); mit!=clusters[first_pos].end(); mit++) {
+			const pos & second_pos = mit->first;
+			bool second_smaller = much_smaller(second_pos,max_pos);
+			cluster & c = clusters[first_pos][second_pos];
+			if (first_smaller && second_smaller && c.lefts.size()<MIN_CLUSTER_SIZE && c.rights.size()<MIN_CLUSTER_SIZE) {
+				//trim this cluster
+				to_remove.insert(pair<pos,pos>(first_pos,second_pos));
+			}
+		}	
+	}
+	
+	//cerr << "Preparing to remove " << to_remove.size() << " clusters" << endl;
+	for (set< pair<pos, pos> >::iterator sit=to_remove.begin(); sit!=to_remove.end(); sit++) {
+		clusters[sit->first].erase(sit->second);
+		if (clusters[sit->first].size()==0) {
+			clusters.erase(sit->first);
+		}
+	}
+		
+}
+
 void update_cluster(pos a, pos b) {
 
 	if (a>b) {
@@ -287,7 +330,7 @@ void update_cluster(pos a, pos b) {
 	}
 	
 	//make a new entry
-	cluster c  =cluster(a.strand,b.strand);
+	cluster c = cluster(a.strand,b.strand);
 	if (a.marked) {
 		c.lefts.insert(a);
 	}
@@ -339,8 +382,9 @@ unsigned int hash_string(const char * s) {
 }
 
 
-void process_read(vector<string> & v_row) {
+pos process_read(vector<string> & v_row) {
 	//ok now we have a line lets check it out
+	pos min_pos = pos(0,0,true);
 	if (v_row[0].c_str()[0]=='@') {
 		//its header
 		//cerr << row << endl;
@@ -354,6 +398,7 @@ void process_read(vector<string> & v_row) {
 			bool my_strand = ((flags & REVERSE)==0);
 
 			pos my =  pos(my_chr,my_pos,my_strand);
+			min_pos=my;
 
 			my.marked=true;
 			string my_cigar = v_row[5];
@@ -375,6 +420,12 @@ void process_read(vector<string> & v_row) {
 						isize=-isize;
 					}
 				}
+				
+				pos mate = pos(mate_chr,mate_pos,mate_strand);
+
+				if (min_pos>mate) {
+					min_pos=mate;
+				}
 
 				if (isize<(WEIRD_STDDEV*stddev+mean)) {
 					//this is kinda normal
@@ -388,7 +439,7 @@ void process_read(vector<string> & v_row) {
 						}
 					}
 					
-					return;
+					return min_pos;
 				}
 
 
@@ -405,7 +456,7 @@ void process_read(vector<string> & v_row) {
 
 				//cerr << my_chr << ":" << my_pos << " " << mate_chr << ":" << mate_pos << endl;
 
-				pos mate = pos(mate_chr,mate_pos,mate_strand);
+				//pos mate = pos(mate_chr,mate_pos,mate_strand);
 
 
 				#pragma omp critical 
@@ -420,10 +471,11 @@ void process_read(vector<string> & v_row) {
 			
 		}
 	}
-	return ;
+	return min_pos;
 }
 
 int main(int argc, char ** argv) {
+	//assume input is sorted
 	if (argc<3) {
 		cerr << argv[0]  << " mean stddev" << endl;
 		exit(1);
@@ -451,6 +503,7 @@ int main(int argc, char ** argv) {
 
 	vector< string > rows;
 	rows.reserve(READ_SIZE);
+	pos max_pos(0,0,true);
 	while (true) {
 		//read in a million
 		rows.clear();
@@ -482,6 +535,7 @@ int main(int argc, char ** argv) {
 		{
 			unsigned int threads = omp_get_num_threads();
 			unsigned int thread_id = omp_get_thread_num();
+			pos t_max_pos=pos(0,0,true);
 			for (unsigned int i=0; i<read; i++) {
 				if (i%threads==thread_id) {
 					//process it
@@ -490,11 +544,27 @@ int main(int argc, char ** argv) {
 					for (string field; getline(ss, field, field_delim); ) {
 						v_row.push_back(field);
 					}
-					process_read(v_row);
+					pos current_min = process_read(v_row);
+					if (t_max_pos.chr==0 || current_min>t_max_pos) {
+						t_max_pos=current_min;
+					}
 					
 				}
 			}
+			#pragma omp critical
+			{
+				if (t_max_pos.chr!=0 && (max_pos.chr==0 || max_pos<t_max_pos)) {
+					max_pos=t_max_pos;
+				}
+			}
 		}
+
+		if (max_pos.chr!=0) {
+			clean_clusters(max_pos);
+		}
+
+		cerr << max_pos.chr << " : " << max_pos.coord << endl;
+	
 		if (read!=READ_SIZE) {
 			break;
 		}
