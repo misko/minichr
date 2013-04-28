@@ -25,3 +25,10 @@ cat  /dupa-filer/misko/dipg29t/n3t10_nocentro_refined | sed 's/\(chr[^:]*\):\([0
 
 
  a=0; for x in data_x*.svg; do /Applications/Inkscape.app/Contents/Resources/bin/inkscape --export-png  type1_$a.png --export-background=white $x; a=`expr $a + 1`; done
+
+
+
+
+
+#take the output of make_clusters and get the normal fitlered (1000bp) , centromere subtracted , 1000bp+ calls
+python2.6 ../../overlap.py 1000 ../../DIPG01N/clusters/clusters.txt_f.gz clusters_mq10_cov10.txt_f.gz  |  awk '{if (NF>4) {print $0}}' | awk '{print $1"\t"$2"\t"$2+1"\t"$3"\t"$4"\t"$5"\t"$6"\t"$7}'  | /hpf/largeprojects/ccm/amorrison/DIPG_WGS/junk/bedtools-2.17.0/bin/intersectBed -a - -b /hpf/largeprojects/ccm/amorrison/DIPG_WGS/scripts/centromeres_merged -v | awk '{print $5"\t"$6"\t"$6+1"\t"$7"\t"$1"\t"$2"\t"$4"\t"$8}' | /hpf/largeprojects/ccm/amorrison/DIPG_WGS/junk/bedtools-2.17.0/bin/intersectBed -a - -b /hpf/largeprojects/ccm/amorrison/DIPG_WGS/scripts/centromeres_merged -v  | awk '{print $5"\t"$6"\t"$7"\t"$1"\t"$2"\t"$4"\t"$8}' | awk '{d=$2-$5; if (d<0) {d=-d}; if ($1==$4 && d<1000) { } else {print $0}}'
