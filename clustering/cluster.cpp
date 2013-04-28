@@ -14,7 +14,7 @@ using namespace std;
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
-#define FAR_AWAY	50000
+#define FAR_AWAY	500
 #define MIN_CLUSTER_SIZE	3
 
 #define UNMAPPED	0x4
@@ -260,7 +260,7 @@ void clean_clusters(pos max_pos) {
 			const pos & second_pos = mit->first;
 			bool second_smaller = much_smaller(second_pos,max_pos);
 			cluster & c = clusters[first_pos][second_pos];
-			if (first_smaller && second_smaller && c.lefts.size()<MIN_CLUSTER_SIZE && c.rights.size()<MIN_CLUSTER_SIZE) {
+			if ((first_smaller || second_smaller) && c.lefts.size()<MIN_CLUSTER_SIZE && c.rights.size()<MIN_CLUSTER_SIZE) {
 				//trim this cluster
 				to_remove.insert(pair<pos,pos>(first_pos,second_pos));
 			}
