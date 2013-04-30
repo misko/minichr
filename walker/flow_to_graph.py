@@ -7,10 +7,15 @@ from copy import deepcopy
 #WARNING MAKING ASSUMPTIONS ABOUT EDGES.......
 #BAD ASSUMPTIONS
 
+
+keep_empty=False # set this to true to keep edges with no flow!
+
 node_to_pos={}
 genomic_edges={}
 somatic_edges={}
 all_edges={}
+
+break_points=set()
 
 def to_pos(s):
 	s=s.split(':')
@@ -26,8 +31,8 @@ def to_chr(s):
 			return 24
 	return int(s)
 
-if len(sys.argv)!=4:
-	print "%s problem_file paths scale" % sys.argv[0]
+if len(sys.argv)!=5:
+	print "%s problem_file paths scale smooth" % sys.argv[0]
 	sys.exit(1)
 
 
@@ -55,6 +60,8 @@ def read_problem_file(filename):
 				somatic_edges[(f,t)]=[]
 			somatic_edges[(f,t)].append((cost,False,typ))
 			somatic_edges[(f,t)].append((cost,False,typ))
+			break_points.add(f)
+			break_points.add(t)
 		elif line[1]=='Genomic':
 			#genomid line
 			#c Genomic       chr2:8917257    chr2:8921728
@@ -108,6 +115,7 @@ def annotate_flow(p):
 	return used
 
 
+
 def read_flow_file(filename):
 	#f       1       3         45
 	#f       3      65          0
@@ -125,25 +133,69 @@ def read_flow_file(filename):
 	h.close()
 	print "# " + filename 
 	used=annotate_flow(flows)
-	l_genomic_edges=[]
-	for f,t in genomic_edges:
-		u=0
-		if (f,t) in used:
-			u=int(used[(f,t)]['genomic']*scale)
-		l_genomic_edges.append((f,t,0,u))	
-	print l_genomic_edges
+	
+	used_breakpoints=set()
+
 	l_somatic_edges=[]
 	for f,t in somatic_edges:
 		u=0
 		if (f,t) in used:
 			u=int(used[(f,t)]['somatic']*scale)
-		l_somatic_edges.append((f,t,somatic_edges[(f,t)][0][2],u))
+		if keep_empty or u!=0:
+			l_somatic_edges.append((f,t,somatic_edges[(f,t)][0][2],u))
+			used_breakpoints.add(f)
+			used_breakpoints.add(t)
+
+	l_genomic_edges=[]
+	genomic_edges_keys=genomic_edges.keys()
+	genomic_edges_keys.sort()
+	for f,t in genomic_edges_keys:
+		u=0
+		if (f,t) in used:
+			u=int(used[(f,t)]['genomic']*scale)
+	
+		if f not in used_breakpoints and len(l_genomic_edges)>0 and l_genomic_edges[-1][1]==f and l_genomic_edges[-1][3]==u:
+			#add it to the previous
+			l_genomic_edges[-1]=(l_genomic_edges[-1][0],t,0,u)
+		else:
+			if len(l_genomic_edges)>0 and l_genomic_edges[-1][0][0]==f[0] and 0<f[1]-l_genomic_edges[-1][1][1]<smooth:
+				l_genomic_edges.append((l_genomic_edges[-1][1],f,0,0))
+			l_genomic_edges.append((f,t,0,u))
+
+	if not keep_empty and len(l_genomic_edges)>1:
+		to_remove=[]
+		#check front
+		(f,t,y,u)=l_genomic_edges[0]
+		(nf,nt,ny,nu)=l_genomic_edges[1]
+		if u==0 and f not in used_breakpoints and t not in used_breakpoints and t!=nf:
+			to_remove.append((f,t,y,u))
+		#check back
+		(f,t,y,u)=l_genomic_edges[-1]
+		(pf,pt,py,pu)=l_genomic_edges[1]
+		if u==0 and f not in used_breakpoints and t not in used_breakpoints and f!=pt:
+			to_remove.append((f,t,y,u))
+		#check middle
+		for x in range(1,len(l_genomic_edges)-1):
+			(pf,pt,py,pu)=l_genomic_edges[x-1]
+			(f,t,y,u)=l_genomic_edges[x]
+			(nf,nt,ny,nu)=l_genomic_edges[x+1]
+			if u==0 and f not in used_breakpoints and t not in used_breakpoints and f!=pt and t!=nf:
+				to_remove.append((f,t,y,u))
+			elif u==0 and nf!=t and t not in used_breakpoints:
+				to_remove.append((f,t,y,u))
+			elif u==0 and f!=pt and f not in used_breakpoints:
+				to_remove.append((f,t,y,u))
+		for x in to_remove:
+			l_genomic_edges.remove(x)
+			
+	print l_genomic_edges
 	print l_somatic_edges
 
 problem_filename=sys.argv[1]
 #paths_filename=sys.argv[2]
 flow_filename=sys.argv[2]
 scale=float(sys.argv[3])
+smooth=int(sys.argv[4])
 
 
 read_problem_file(problem_filename)
