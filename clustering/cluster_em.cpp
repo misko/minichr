@@ -246,6 +246,25 @@ set<int> find_clusters_for_pos(pos & a ) {
 	map<pos, set<int> >::iterator left_it = cluster_pos.lower_bound(left_bound);	
 	map<pos, set<int> >::iterator right_it = cluster_pos.upper_bound(right_bound);	
 
+	
+	/*cerr << "XXX" << left_bound.str() << " " << cluster_pos.size() << " " << right_bound.str() << endl;
+	if (left_it==cluster_pos.end()) {
+		cerr << " FAILED LEFT" << endl;
+	} else {
+		pos  x= left_it->first;
+		cerr << "HIT " << x.str() << endl;
+	}
+	if (right_it==cluster_pos.end()) {
+		cerr << " FAILED LEFT" << endl;
+	} else {
+		pos  x= right_it->first;
+		cerr << "HIT " << x.str() << endl;
+	}
+	for (map<pos, set<int> >::iterator mit=cluster_pos.begin(); mit!=cluster_pos.end(); mit++) {
+		pos x = mit->first; 
+		cerr << " " << x.str() ;
+	}
+	cerr << endl;*/
 	set<int> found;
 
 	//keep going!
@@ -262,6 +281,7 @@ set<int> find_clusters_for_pos(pos & a ) {
 		}
 		left_it++;
 	}
+	
 
 	return found;
 
@@ -422,7 +442,6 @@ int find_cluster(pos  a, pos  b) {
 	//try to find best cluster to pair with
 	unsigned int d=-1;
 	int cid=-1;
-	//cerr << a.str() << "\t" << b.str() << endl;
 	for (set<int>::iterator sit=intersection.begin(); sit!=intersection.end(); sit++) {
 		cluster & c = clusters[*sit];
 		//if the pair spans then check strands
@@ -447,13 +466,13 @@ int find_cluster(pos  a, pos  b) {
 			d=cd;
 			cid=*sit;
 		}
-		//cerr << c.b1.str() << " " << c.b2.str() << endl;
+		//cerr << "CHECK " <<  c.b1.str() << " " << c.b2.str() << endl;
 	}	
 
-	/*if (cid!=-1) {
+	if (cid!=-1) {
 		cluster & c = clusters[cid];
-		cerr << "X" << c.b1.str() << " " << c.b2.str() << endl;
-	}*/
+		//cerr << "X" << c.b1.str() << " " << c.b2.str() << endl;
+	}
 	//return pair<pos,pos>(a,b);	
 	return cid;
 
@@ -611,7 +630,8 @@ cout << "======================" << endl;
 	return swalignment.sw_score;*/
 
 }
-
+int used=0;
+int skip=0;
 void process_mapped_read(vector<string> v_row) {
 	int flags = atoi(v_row[1].c_str());
 	string qname = v_row[0];
@@ -647,7 +667,7 @@ void process_mapped_read(vector<string> v_row) {
 
 		
 
-		if (isize<(WEIRD_STDDEV*stddev+mean)) {
+		if (mate_strand!=my_strand && isize<(WEIRD_STDDEV*stddev+mean)) {
 			//this is kinda normal
 			if (my.sharp) {
 				if (!my.strand) {
@@ -662,20 +682,21 @@ void process_mapped_read(vector<string> v_row) {
 				cread r = cread(qname,id,my,cid);
 				reads[qname].push_back(r);
 			}
-			
+			skip++;	
 			return;
 		}
-
 
 		if (my.strand) {
 			my.coord+=c_len;
 		}
 
 		//cerr << my_chr << ":" << my_pos << " " << mate_chr << ":" << mate_pos << endl;
-
+		
 				
 		int cid = find_cluster(my,mate);
 		if (cid!=-1) {
+			used++;
+			cerr << used << " " << skip << endl;
 			//cerr << cid << endl;
 			cluster & c = clusters[cid];
 			int id = reads[qname].size();
@@ -960,7 +981,7 @@ int main( int argc, char ** argv) {
 		if (v.size()==2) {
 					//cerr << " something " << endl;
 			unsigned int d = v[0].inside-v[1].inside;
-			if (d<(WEIRD_STDDEV*stddev+mean)) {
+			if (v[0].inside.strand!=v[1].inside.strand && d<(WEIRD_STDDEV*stddev+mean)) {
 					//cerr << " NORMAL " << endl;
 
 				if ( !v[0].inside.sharp && !v[1].inside.sharp) {

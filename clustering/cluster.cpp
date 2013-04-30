@@ -427,7 +427,7 @@ pos process_read(vector<string> & v_row) {
 					min_pos=mate;
 				}
 
-				if (isize<(WEIRD_STDDEV*stddev+mean)) {
+				if (mate_strand!=my_strand && isize<(WEIRD_STDDEV*stddev+mean)) {
 					//this is kinda normal
 					if (my.sharp) {
 						if (!my.strand) {
