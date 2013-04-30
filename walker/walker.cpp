@@ -14,6 +14,8 @@
 #include <string.h>
 #include <limits>
 
+#define LARGE_COMPONENT 4
+
 #define	SZ	100	//max ocpy count
 #define MAX_WALK	180
 #define MAX_REUSE	2
@@ -544,7 +546,8 @@ void read_links(char * filename) {
 			} else {
 				type=1;
 			}
-		}	
+		}
+
 
 		//get the normal support
 		if (bp_support.find(posa)==bp_support.end() ) {
@@ -577,10 +580,14 @@ void read_links(char * filename) {
 			type=5-type;
 		}
 		somatic_edges[e.reverse()]=ei;
+		somatic_edges[e.reverse()].type=type;
 
+		
 
 		jump_edges[posa].insert(posb);
 		jump_edges[posb].insert(posa);
+
+		
 	}
 }
 
@@ -1218,7 +1225,7 @@ void flow_solve(int contigs) {
 	int status;
 	
 	/* Open the command for reading. */
-	fp = popen("cat ./problem_file | cs2.exe", "r");
+	fp = popen("cat ./problem_file | /data/misko/2013.04.12/cs2-4.3/cs2.exe", "r");
 	if (fp == NULL) {
 		printf("Failed to run cs2.exe command\n" );
 		exit(1);
@@ -1307,8 +1314,10 @@ int main ( int argc, char ** argv) {
 	map<pos,int> connected_components = find_connected_components();
 	map<int, int> connected_components_sizes;
 	int size_3_or_more=0;
+	set<int> large_components;
 	for (map<pos,int>::iterator mit = connected_components.begin(); mit!=connected_components.end(); mit++) {
-		connected_components_sizes[mit->second]++;	
+		connected_components_sizes[mit->second]++;
+			
 	}
 
 	//lets find the max comopnent and look at that
@@ -1318,6 +1327,9 @@ int main ( int argc, char ** argv) {
 	for (map<int, int>::iterator mit = connected_components_sizes.begin(); mit!=connected_components_sizes.end(); mit++) {
 		if (mit->second>2) {
 			size_3_or_more++;
+		}
+		if (mit->second>LARGE_COMPONENT) {
+			large_components.insert(mit->first);
 		}
 		sizes[mit->second]+=1;
 		if (mit->second>max) {
@@ -1344,7 +1356,10 @@ int main ( int argc, char ** argv) {
 	set<edge> to_remove;
 	for (map<edge, edge_info>::iterator mit = genomic_edges.begin(); mit!=genomic_edges.end(); mit++ ) {
 		edge e = mit->first;
-		if (connected_components[e.posa]!=max_id || connected_components[e.posb]!=max_id) {
+		/*if (connected_components[e.posa]!=max_id || connected_components[e.posb]!=max_id) {
+			to_remove.insert(e);
+		}*/
+		if (large_components.count(connected_components[e.posa])==0 || large_components.count(connected_components[e.posb])==0) {
 			to_remove.insert(e);
 		}
 	}
@@ -1355,7 +1370,10 @@ int main ( int argc, char ** argv) {
 	//now drop the somatic
 	for (map<edge, edge_info>::iterator mit = somatic_edges.begin(); mit!=somatic_edges.end(); mit++ ) {
 		edge e = mit->first;
-		if (connected_components[e.posa]!=max_id || connected_components[e.posb]!=max_id) {
+		/*if (connected_components[e.posa]!=max_id || connected_components[e.posb]!=max_id) {
+			to_remove.insert(e);
+		}*/
+		if (large_components.count(connected_components[e.posa])==0 || large_components.count(connected_components[e.posb])==0) {
 			to_remove.insert(e);
 		}
 	}
@@ -1365,7 +1383,8 @@ int main ( int argc, char ** argv) {
 	//reconstruct bps
 	bps.clear();
 	for (map<pos,int>::iterator mit=connected_components.begin(); mit!=connected_components.end(); mit++ ){
-		if (mit->second==max_id) {
+		//if (mit->second==max_id) {
+		if (large_components.count(mit->second)!=0) {
 			bps.insert(mit->first);
 		}
 	}
