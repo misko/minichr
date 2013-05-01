@@ -576,8 +576,6 @@ void read_links(char * filename) {
 		//put in the reverse
 		if (type<2) {
 			type=1-type;
-		} else {
-			type=5-type;
 		}
 		somatic_edges[e.reverse()]=ei;
 		somatic_edges[e.reverse()].type=type;
