@@ -641,6 +641,8 @@ void process_mapped_read(vector<string> v_row) {
 
 	pos my =  pos(my_chr,my_pos,my_strand);
 
+	pos min_pos = my;
+
 	my.marked=true;
 	string my_cigar = v_row[5];
 	unsigned int c_len=cigar_len(my_cigar.c_str(),&(my.sharp));
@@ -663,11 +665,21 @@ void process_mapped_read(vector<string> v_row) {
 		}
 
 		pos mate = pos(mate_chr,mate_pos,mate_strand);
-
+		if (mate<min_pos) {
+			min_pos=mate;
+		}
 
 		
+		bool is_normal_pair=true;
+		if (mate_strand==my_strand) {
+			is_normal_pair=false;
+		} else if (!min_pos.strand) {
+			is_normal_pair=false;
+		} else if (isize>=(WEIRD_STDDEV*stddev+mean)) {
+			is_normal_pair=false;
+		}
 
-		if (mate_strand!=my_strand && isize<(WEIRD_STDDEV*stddev+mean)) {
+		if (is_normal_pair) {
 			//this is kinda normal
 			if (my.sharp) {
 				if (!my.strand) {
@@ -696,7 +708,7 @@ void process_mapped_read(vector<string> v_row) {
 		int cid = find_cluster(my,mate);
 		if (cid!=-1) {
 			used++;
-			cerr << used << " " << skip << endl;
+			//cerr << used << " " << skip << endl;
 			//cerr << cid << endl;
 			cluster & c = clusters[cid];
 			int id = reads[qname].size();

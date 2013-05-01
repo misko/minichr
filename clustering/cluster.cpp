@@ -427,7 +427,18 @@ pos process_read(vector<string> & v_row) {
 					min_pos=mate;
 				}
 
-				if (mate_strand!=my_strand && isize<(WEIRD_STDDEV*stddev+mean)) {
+
+
+				bool is_normal_pair=true;
+				if (mate_strand==my_strand) {
+					is_normal_pair=false;
+				} else if (!min_pos.strand) {
+					is_normal_pair=false;
+				} else if (isize>=(WEIRD_STDDEV*stddev+mean)) {
+					is_normal_pair=false;
+				}
+
+				if (is_normal_pair) {
 					//this is kinda normal
 					if (my.sharp) {
 						if (!my.strand) {
@@ -454,7 +465,7 @@ pos process_read(vector<string> & v_row) {
 					}					
 				}
 
-				//cerr << my_chr << ":" << my_pos << " " << mate_chr << ":" << mate_pos << endl;
+				//cerr << my_chr << ":" << my_pos << (my_strand ? "+" : "-") << " " << mate_chr << ":" << mate_pos << (mate_strand ? "+" : "-")  << endl;
 
 				//pos mate = pos(mate_chr,mate_pos,mate_strand);
 
