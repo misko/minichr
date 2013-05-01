@@ -34,6 +34,7 @@ class pos {
 	public:
 		bool marked;
 		bool sharp;
+		int clipped;
 		int chr;
 		unsigned int coord;
 		bool strand; // true is positive
@@ -98,6 +99,7 @@ pos::pos(int chr, unsigned int coord, bool strand) {
 	this->strand=strand;
 	this->marked=false;
 	this->sharp=false;
+	this->clipped=0;
 }
 
 
@@ -106,6 +108,31 @@ pos::pos() {
 	coord=-1;
 	strand=false;
 	marked=false;
+	clipped=0;
+}
+
+bool normal_pair(const pos & a, const pos & b) {
+
+	if (a>b) {
+		return normal_pair(b,a);
+	}
+	
+	const pos & min_pos = a;
+	const pos & max_pos = b;	
+
+	int isize=max_pos-min_pos;
+
+	if (max_pos.strand==min_pos.strand) {
+		return false;
+	} else if (!min_pos.strand) {
+		return false;
+	} else if (isize>=(WEIRD_STDDEV*stddev+mean)) {
+		return false;
+	}
+	
+
+	return true;
+
 }
 
 cluster::cluster(pos b1, pos b2, int support) {
@@ -207,7 +234,7 @@ int to_chr(const char * s) {
 	return atoi(p);
 }
 
-unsigned int cigar_len(const char * s, bool * sharp) {
+unsigned int cigar_len(const char * s, bool * sharp, int * clipped) {
 	unsigned int len=0;
 	unsigned int xlen=0;
 	for (int i=0; i<strlen(s); i++) {
@@ -224,6 +251,7 @@ unsigned int cigar_len(const char * s, bool * sharp) {
 				case 'S':
 					if (xlen>15) {
 						*sharp=true;
+						*clipped=xlen;
 					}
 				case 'I':
 					break;
@@ -641,9 +669,11 @@ void process_mapped_read(vector<string> v_row) {
 
 	pos my =  pos(my_chr,my_pos,my_strand);
 
+	pos min_pos = my;
+
 	my.marked=true;
 	string my_cigar = v_row[5];
-	unsigned int c_len=cigar_len(my_cigar.c_str(),&(my.sharp));
+	unsigned int c_len=cigar_len(my_cigar.c_str(),&(my.sharp),&(my.clipped));
 
 	if ((flags & M_UNMAPPED)==0) {
 
@@ -663,11 +693,13 @@ void process_mapped_read(vector<string> v_row) {
 		}
 
 		pos mate = pos(mate_chr,mate_pos,mate_strand);
-
+		if (mate<min_pos) {
+			min_pos=mate;
+		}
 
 		
 
-		if (mate_strand!=my_strand && isize<(WEIRD_STDDEV*stddev+mean)) {
+		if (normal_pair(my,mate)) {
 			//this is kinda normal
 			if (my.sharp) {
 				if (!my.strand) {
@@ -696,7 +728,7 @@ void process_mapped_read(vector<string> v_row) {
 		int cid = find_cluster(my,mate);
 		if (cid!=-1) {
 			used++;
-			cerr << used << " " << skip << endl;
+			//cerr << used << " " << skip << endl;
 			//cerr << cid << endl;
 			cluster & c = clusters[cid];
 			int id = reads[qname].size();
@@ -780,30 +812,32 @@ void process_unmapped_read(vector<string> v_row) {
 		}
 		if ( MAX(max_forward,max_reverse) >80 ) {
 			pos inside;
-			bool clipped=false; 
+			bool sharp=false;
+			int clipped=0; 
 			//use the alignment!
 			if (max_forward>80) {
 				if (sw1s.sw_score >80) {
-					inside = pos(c.b1.chr,sw1s.ref_begin+cigar_len(sw1s.cigar_string.c_str(),&clipped),true);
+					inside = pos(c.b1.chr,sw1s.ref_begin+cigar_len(sw1s.cigar_string.c_str(),&sharp,&clipped),true);
 				} else {
-					inside = pos(c.b2.chr,sw2s.ref_begin+cigar_len(sw2s.cigar_string.c_str(),&clipped),true);
+					inside = pos(c.b2.chr,sw2s.ref_begin+cigar_len(sw2s.cigar_string.c_str(),&sharp,&clipped),true);
 					//sw2s.sw_score>80
 				}
 			}
 
 			if (max_reverse>80) {
 				if (sw1rs.sw_score >80) {
-					cigar_len(sw1rs.cigar_string.c_str(),&clipped);
+					cigar_len(sw1rs.cigar_string.c_str(),&sharp,&clipped);
 					inside = pos(c.b1.chr,sw1rs.ref_begin,false);
 				} else {
 					//sw2rs.sw_score>80
-					cigar_len(sw2rs.cigar_string.c_str(),&clipped);
+					cigar_len(sw2rs.cigar_string.c_str(),&sharp,&clipped);
 					inside = pos(c.b2.chr,sw2rs.ref_begin,false);
 				}
 			}
 			if (my.coord==0) {
 				my=inside;
-				my.sharp=clipped;
+				my.sharp=sharp;
+				my.clipped=clipped;
 			} else {
 				skip=true;
 			}
@@ -979,18 +1013,24 @@ int main( int argc, char ** argv) {
 			v.clear();
 		}
 		if (v.size()==2) {
-					//cerr << " something " << endl;
-			unsigned int d = v[0].inside-v[1].inside;
-			if (v[0].inside.strand!=v[1].inside.strand && d<(WEIRD_STDDEV*stddev+mean)) {
-					//cerr << " NORMAL " << endl;
+			
+
+			pos max_pos = v[0].inside;
+			pos min_pos = v[1].inside;
+			if (max_pos<min_pos) {
+				max_pos = v[1].inside;
+				min_pos = v[0].inside;
+			}	
+
+
+			if (normal_pair(min_pos,max_pos)) {
 
 				if ( !v[0].inside.sharp && !v[1].inside.sharp) {
 					//drop it, it's too normal
-					//cerr << " TOO NORMAL " << endl;
 					v.clear();
 					continue;
 				}
-				if ( v[0].cid!=-1 && v[1].cid!=-1 && v[0].cid==v[1].cid) {
+				if ( v[0].cid!=-1 && v[0].cid==v[1].cid) {
 					//lets see if correct side is clipped
 					cluster & c = clusters[v[0].cid];
 					unsigned int d01 = v[0].inside-c.b1;
@@ -1001,26 +1041,25 @@ int main( int argc, char ** argv) {
 					unsigned int m = MIN(MIN(d01,d11),MIN(d02,d12));
 					bool clipped_correctly=false;
 					if (d01==m && v[0].inside.sharp) {
+						cerr << v[0].inside.clipped << endl;
 						clipped_correctly=true;
 					} else if (d11==m && v[1].inside.sharp) {
+						cerr << v[1].inside.clipped << endl;
 						clipped_correctly=true;
 					} else if (d02==m && v[0].inside.sharp) {
+						cerr << v[0].inside.clipped << endl;
 						clipped_correctly=true;
 					} else if (d12==m && v[1].inside.sharp) {
+						cerr << v[1].inside.clipped << endl;
 						clipped_correctly=true;
 					}
 		
 					if (!clipped_correctly) {
-						cerr << "SKIPPING BAD CLIP!" << endl;
+						cerr << "SKIPPING BAD CLIP! " << v[0].name << " " << v[1].name <<  endl;
 						v.clear();
 						continue;
 					}
 
-				}
-			}
-			if (MAX(v[0].cid,v[1].cid)==27) {
-				if (v[0].inside-v[1].inside>(WEIRD_STDDEV*stddev+mean)) {
-					t27++;
 				}
 			}
 
@@ -1033,79 +1072,70 @@ int main( int argc, char ** argv) {
 				cerr << "ERROR IN READS x2 " << endl;
 				continue;
 			}
-	
+
+			//if one did not have a cid assigned, assign it now	
 			int cid=MAX(v[0].cid,v[1].cid);
-			v[0].cid=cid;
-			v[1].cid=cid;
-
-
 
 			//lets check if the span the break
 			cluster & c = clusters[cid];
-			pos & a = v[0].inside;
-			pos & b = v[1].inside;
 			
-			unsigned a_bp = 0;
-			if ( (a-c.b1) > (a-c.b2)) {
-				a_bp=2;
-			} else if ( (a-c.b1) < (a-c.b2)) {
-				a_bp=1;
+			unsigned min_pos_bp = 0;
+			if ( (min_pos-c.b1) > (min_pos-c.b2)) {
+				min_pos_bp=2;
+			} else if ( (min_pos-c.b1) < (min_pos-c.b2)) {
+				min_pos_bp=1;
 			} else {
 				cerr << "EERRRO " << endl;
 				continue;
 			}
-			unsigned b_bp = 0;
-			if ( (b-c.b1) > (b-c.b2)) {
-				b_bp=2;
-			} else if ( (b-c.b1) < (b-c.b2)) {
-				b_bp=1;
+			unsigned max_pos_bp = 0;
+			if ( (max_pos-c.b1) > (max_pos-c.b2)) {
+				max_pos_bp=2;
+			} else if ( (max_pos-c.b1) < (max_pos-c.b2)) {
+				max_pos_bp=1;
 			} else {
 				cerr << "EERRRO " << endl;
 				continue;
 			}
 
-			if (a_bp!=b_bp) {
-				//span the break
-				if (a_bp==1) {
-					c.b1pairs.insert(a);
-					c.b2pairs.insert(b);
+
+			if (min_pos_bp!=max_pos_bp) {
+				//span the break points!!!
+				if (min_pos_bp==1) {
+					c.b1pairs.insert(min_pos);
+					c.b2pairs.insert(max_pos);
 				} else {
-					c.b2pairs.insert(a);
-					c.b1pairs.insert(b);
+					c.b2pairs.insert(min_pos);
+					c.b1pairs.insert(max_pos);
 				}
 			} else {
-				//dont span
-					
+				//dont span, only on one side
 			}
 
-			if (a_bp==1) {
-				c.b1p.insert(a);
-				if (a.sharp) {
-					c.b1pc.insert(a);
+			if (min_pos_bp==1) {
+				c.b1p.insert(min_pos);
+				if (min_pos.sharp) {
+					c.b1pc.insert(min_pos);
 				}
 			} else {
-				c.b2p.insert(a);
-				if (a.sharp) {
-					c.b2pc.insert(a);
-				}
-			}
-
-			if (b_bp==1) {
-				c.b1p.insert(b);
-				if (b.sharp) {
-					c.b1pc.insert(b);
-				}
-			} else {
-				c.b2p.insert(b);
-				if (b.sharp) {
-					c.b2pc.insert(b);
+				c.b2p.insert(min_pos);
+				if (min_pos.sharp) {
+					c.b2pc.insert(min_pos);
 				}
 			}
 
-			/*for (int i=0; i<v.size(); i++) {
-				cread & r = v[i];
-				cout << qname << "\t" << r.cid << "\t" << r.inside.chr << ":" << r.inside.coord << endl;
-			}*/
+			if (max_pos_bp==1) {
+				c.b1p.insert(max_pos);
+				if (max_pos.sharp) {
+					c.b1pc.insert(max_pos);
+				}
+			} else {
+				c.b2p.insert(max_pos);
+				if (max_pos.sharp) {
+					c.b2pc.insert(max_pos);
+				}
+			}
+
 
 		}
 	}

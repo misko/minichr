@@ -1,0 +1,10 @@
+/Users/miskodzamba/research/bwa/bwa-0.7.4/bwa index ref.fa
+sleep 0.5
+/Users/miskodzamba/research/bwa/bwa-0.7.4/bwa aln ref.fa ls_f_reads.fq > ls_f_reads.sai
+sleep 0.5
+/Users/miskodzamba/research/bwa/bwa-0.7.4/bwa aln ref.fa ls_r_reads.fq > ls_r_reads.sai
+sleep 0.5
+/Users/miskodzamba/research/bwa/bwa-0.7.4/bwa sampe ref.fa ls_f_reads.sai ls_r_reads.sai ls_f_reads.fq ls_r_reads.fq > mapped.sam
+cat mapped.sam | samtools view -Sb -o mapped.bam -
+samtools sort mapped.bam mapped_sorted
+samtools index mapped_sorted.bam
