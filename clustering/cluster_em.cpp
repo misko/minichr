@@ -449,7 +449,7 @@ pair<pos,pos> max_likelihood_bp(cluster & c,  pos bp1, pos bp2) {
 				pos & read_bp1 = c.pairs[i].first;	
 				pos & read_bp2 = c.pairs[i].second;
 				//cerr << read_bp1.clipped << " " << read_bp2.clipped << endl;
-				int d = 2*READ_LENGTH+ (read_bp1 - a_bp) + (read_bp2 - b_bp) + read_bp1.clipped + read_bp2.clipped;
+				int d = (read_bp1 - a_bp) + (read_bp2 - b_bp) + read_bp1.clipped + read_bp2.clipped;
 				//TODO this is wonky
 				if (bp1.strand) {
 					if (read_bp1>a_bp) {
