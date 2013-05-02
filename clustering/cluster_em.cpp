@@ -479,7 +479,7 @@ pair<pos,pos> max_likelihood_bp(cluster & c, double u, double sd) {
 			}
 			//do the clipped
 			int sz=2*BP_WIGGLE+1;
-			double p = 0.9;
+			double p = 0.999;
 			for (set<pos>::iterator sit=c.b1pc.begin(); sit!=c.b1pc.end(); sit++) {
 				if ( (a_bp-*sit)<3 ) {
 					likelihood+=log(p/5);
@@ -1427,7 +1427,7 @@ int main( int argc, char ** argv) {
 		
 		double sd = sqrt(variance);
 
-	
+		cerr << cid << " " << u << " " << sd << endl;
 		cluster & c = clusters[cid];
 		//if (c.b1pairs.size()>0 && c.b2pairs.size()>0) {
 			pair<pos,pos> max_l = estimate_breakpoint(c,u,sd);
