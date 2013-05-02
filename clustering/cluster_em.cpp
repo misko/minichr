@@ -126,7 +126,7 @@ bool normal_pair(const pos & a, const pos & b) {
 	const pos & min_pos = a;
 	const pos & max_pos = b;	
 
-	int isize=max_pos-min_pos;
+	unsigned int isize=max_pos-min_pos;
 
 	if (max_pos.strand==min_pos.strand) {
 		return false;
@@ -134,6 +134,11 @@ bool normal_pair(const pos & a, const pos & b) {
 		return false;
 	} else if (isize>=(WEIRD_STDDEV*stddev+mean)) {
 		return false;
+	}
+
+	if (a.chr!=b.chr) {
+		cerr << "RAELLY BIG ERROR!" << endl;
+		exit(1);
 	}
 	
 
