@@ -17,6 +17,8 @@ using namespace std;
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
+#define BP_WIGGLE	170
+
 #define UNMAPPED        0x4
 #define M_UNMAPPED      0x8
 #define REVERSE         0x10
@@ -62,6 +64,8 @@ class cluster {
 
 		multiset<pos> b1pairs;
 		multiset<pos> b2pairs;
+
+		vector< pair< pos, pos > > pairs;
 	
 		pos b1paired;
 		pos b2paired;
@@ -251,8 +255,8 @@ unsigned int cigar_len(const char * s, bool * sharp, int * clipped) {
 				case 'S':
 					if (xlen>15) {
 						*sharp=true;
-						*clipped=xlen;
 					}
+					*clipped=MAX(*clipped,xlen);
 				case 'I':
 					break;
 				default:
@@ -412,10 +416,112 @@ pos snap_pos(pos p, multiset<pos> ps) {
 	return p;
 }
 
-void estimate_breakpoint(cluster & c ) {
-	if (c.b1pairs.size()==0 || c.b2pairs.size()==0) {
-		return;
+
+pair<pos,pos> max_likelihood_bp(cluster & c,  pos bp1, pos bp2) {
+	//map< pos, map< pos , double > > likelihoods;
+	double max_likelihood=log(0);
+	pos max_bp1=pos(0,0,true);
+	pos max_bp2=pos(0,0,true);
+	for (int a=-BP_WIGGLE; a<=BP_WIGGLE; a++) {
+		if (a<0 && -a>bp1.coord){
+			continue;
+		}
+		pos a_bp = pos(bp1.chr,bp1.coord+a,bp1.strand);
+		for (int b=-BP_WIGGLE; b<=BP_WIGGLE; b++) {
+			if (b<0 && -b>bp2.coord){
+				continue;
+			}
+			pos b_bp = pos(bp2.chr,bp2.coord+b,bp2.strand);
+		
+			double likelihood = 0.0;
+
+			//do the fully paired first
+			int sum=0;
+			for (int i=0; i<c.pairs.size(); i++) {
+				pos & read_bp1 = c.pairs[i].first;	
+				pos & read_bp2 = c.pairs[i].second;
+				//cerr << read_bp1.clipped << " " << read_bp2.clipped << endl;
+				int d = (read_bp1 - a_bp) + (read_bp2 - b_bp) + read_bp1.clipped + read_bp2.clipped;
+				//TODO this is wonky
+				if (bp1.strand) {
+					if (read_bp1>a_bp) {
+						d+=mean;
+					}
+				} else {
+					if (read_bp1<a_bp) {
+						d+=mean;
+					}
+				}
+				if (!bp2.strand) {
+					if (read_bp2>b_bp) {
+						d+=mean;
+					}
+				} else {
+					if (read_bp2<b_bp) {
+						d+=mean;
+					}
+				}
+				//likelihoods[a_bp][b_bp]-=(d-mean)*(d-mean)/(2*stddev*stddev);
+				likelihood+=(-(d-mean)*(d-mean)/(2*stddev*stddev))*log(sqrt(2*3.141)*stddev);
+				//cerr << " d is " << d << endl; 
+				//cerr << read_bp1.str() << " " << read_bp2.str() << " " << d << endl;
+				sum+=d;
+			}
+			//do the clipped
+			int sz=2*BP_WIGGLE+1;
+			double p = 0.9;
+			for (set<pos>::iterator sit=c.b1pc.begin(); sit!=c.b1pc.end(); sit++) {
+				if ( (a_bp-*sit)<3 ) {
+					likelihood+=log(p/5);
+				} else {
+					likelihood+=log((1-p)/(sz-5));
+				}
+			}
+			for (set<pos>::iterator sit=c.b2pc.begin(); sit!=c.b2pc.end(); sit++) {
+				if ( (b_bp-*sit)<3 ) {
+					likelihood+=log(p/5);
+				} else {
+					likelihood+=log((1-p)/(sz-5));
+				}
+			}
+		
+			if (likelihood>max_likelihood) {
+				//cerr << "SWITCH " << a << " " << b << " " << likelihood << " " << sum/(v.size()) <<  endl;
+				max_bp1=a_bp;
+				max_bp2=b_bp;
+				max_likelihood=likelihood;
+			}
+		}
 	}
+	
+	if (max_bp1.strand) {
+		max_bp1.coord--;
+	} else {
+		max_bp1.coord++;
+	}
+
+	if (max_bp2.strand) {
+		max_bp2.coord--;
+	} else {
+		max_bp2.coord++;
+	}
+	
+
+	//cerr << "ONE " << max_bp1.str() << " " << max_bp2.str() << endl;
+	//return pair<pos,pos>(pos(0,0,true),pos(0,0,true));
+	return pair<pos,pos>(max_bp1,max_bp2);
+}
+
+pair<pos,pos> estimate_breakpoint(cluster & c ) {
+	if (c.b1pairs.size()==0 || c.b2pairs.size()==0) {
+		return pair<pos,pos>();
+	}
+
+
+	//lets try some probabilities ( well, skip it log likelihoods ;) )
+	pair<pos,pos> max_l = max_likelihood_bp(c,c.b1,c.b2);
+	//end of crazyness
+
 	if (c.b1.strand) {
 		c.b1paired=set_max(c.b1pairs);
 		//c.b1paired=set_median(c.b1pairs,0.98);
@@ -437,6 +543,7 @@ void estimate_breakpoint(cluster & c ) {
 	//lets try to snap this thing
 	c.b1snapped=snap_pos(c.b1paired,c.b1pc);
 	c.b2snapped=snap_pos(c.b2paired,c.b2pc);
+	return max_l;
 }
 
 int find_cluster(pos  a, pos  b) {
@@ -473,8 +580,8 @@ int find_cluster(pos  a, pos  b) {
 	for (set<int>::iterator sit=intersection.begin(); sit!=intersection.end(); sit++) {
 		cluster & c = clusters[*sit];
 		//if the pair spans then check strands
-		bool a_b1 = (c.b1-a)<(c.b2-a);
-		bool b_b1 = (c.b1-b)<(c.b2-b);	
+		bool a_b1 = (c.b1-a)<(c.b2-a); // a belongs to b1
+		bool b_b1 = (c.b1-b)<(c.b2-b); // b belongs to b1
 
 		if (a_b1!=b_b1) {
 			//spans, check strands
@@ -763,6 +870,7 @@ void process_unmapped_read(vector<string> v_row) {
 
 	//lets find out what clusters we can go to 
 	pos mate = pos(mate_chr,mate_pos,mate_strand);
+
 	set<int> cids = find_clusters_for_pos(mate);
 
 
@@ -777,6 +885,9 @@ void process_unmapped_read(vector<string> v_row) {
 	
 		unsigned int d1 = mate-c.b1;
 		unsigned int d2 = mate-c.b2;
+
+		int mate_belongs_to_bp = (d1 < d2 ? 1 : 2);
+
 		if (d1==-1 && d2==-1) {
 			cerr << "both wrong " << endl;
 			continue;
@@ -810,6 +921,9 @@ void process_unmapped_read(vector<string> v_row) {
 		if (max_forward>80 && max_reverse>80) {
 			continue;
 		}
+
+		int belongs_to_bp=0;
+
 		if ( MAX(max_forward,max_reverse) >80 ) {
 			pos inside;
 			bool sharp=false;
@@ -818,8 +932,12 @@ void process_unmapped_read(vector<string> v_row) {
 			if (max_forward>80) {
 				if (sw1s.sw_score >80) {
 					inside = pos(c.b1.chr,sw1s.ref_begin+cigar_len(sw1s.cigar_string.c_str(),&sharp,&clipped),true);
+					//cerr << sw1s.cigar_string.c_str() << endl;
+					belongs_to_bp=1;
 				} else {
 					inside = pos(c.b2.chr,sw2s.ref_begin+cigar_len(sw2s.cigar_string.c_str(),&sharp,&clipped),true);
+					//cerr << sw2s.cigar_string.c_str() << endl;
+					belongs_to_bp=2;
 					//sw2s.sw_score>80
 				}
 			}
@@ -827,20 +945,53 @@ void process_unmapped_read(vector<string> v_row) {
 			if (max_reverse>80) {
 				if (sw1rs.sw_score >80) {
 					cigar_len(sw1rs.cigar_string.c_str(),&sharp,&clipped);
+					//cerr << sw1rs.cigar_string.c_str() << endl;
 					inside = pos(c.b1.chr,sw1rs.ref_begin,false);
+					belongs_to_bp=1;
 				} else {
 					//sw2rs.sw_score>80
 					cigar_len(sw2rs.cigar_string.c_str(),&sharp,&clipped);
+					//cerr << sw2rs.cigar_string.c_str() << endl;
 					inside = pos(c.b2.chr,sw2rs.ref_begin,false);
+					belongs_to_bp=2;
 				}
 			}
-			if (my.coord==0) {
-				my=inside;
-				my.sharp=sharp;
-				my.clipped=clipped;
+
+			//cerr << clipped << endl;
+
+			if (mate_belongs_to_bp!=belongs_to_bp) {
+				if (belongs_to_bp==1) {
+					if (inside.strand!=c.b1.strand) {
+						//no good!
+						continue;
+					}
+					if (mate.strand==c.b2.strand) {
+						//no good!
+						continue;
+					}
+				} else {
+					if (mate.strand!=c.b1.strand) {
+						//no good
+						continue;
+					}
+					if (inside.strand==c.b2.strand) {
+						//no good!
+						continue;
+					}
+				}
 			} else {
+
+			}
+			//cerr << "ACCEPTED ALIGNMENT " << endl;
+			//already have a candidate
+			if (my.coord!=0) {	
 				skip=true;
 			}
+
+			my=inside;
+			my.sharp=sharp;
+			my.clipped=clipped;
+		
 		} 
 		
 		/*int max=MAX(MAX(b1s,b2s),MAX(b1rs,b2rs));
@@ -854,25 +1005,15 @@ void process_unmapped_read(vector<string> v_row) {
 
 	if (!skip && my.coord!=0) {
 		//should add the alignment
-		//cerr << "TRYING TO ADD " <<  a.inside.chr << ":" << a.inside.coord << " " << mate.chr << ":" << mate.coord << endl;
+		//cerr << "TRYING TO ADD " <<  endl;
 		int cid = find_cluster(my,mate);
 		if (cid!=-1) {
+			//cerr << "ADDed " <<  endl;
 			//check if this is even close to possible
 			cluster & c  = clusters[cid];
-			bool my_b1 = (c.b1-my)<(c.b2-my) ;
-			if (my_b1 && my.strand!=c.b1.strand) {
-
-			} else if (!my_b1 && my.strand==c.b2.strand) {
-
-			} else if (MIN(my-c.b1,my-c.b2)>=4*stddev) {
-				//skip it
-				
-			} else {
-				
-				int id = reads[qname].size();
-				cread r = cread(qname,id,my,cid);
-				reads[qname].push_back(r);
-			}
+			int id = reads[qname].size();
+			cread r = cread(qname,id,my,cid);
+			reads[qname].push_back(r);
 			//cerr << cid << " " << qname << " " << a.inside.chr << " " << a.inside.coord << endl;			
 		}
 	}
@@ -1041,21 +1182,21 @@ int main( int argc, char ** argv) {
 					unsigned int m = MIN(MIN(d01,d11),MIN(d02,d12));
 					bool clipped_correctly=false;
 					if (d01==m && v[0].inside.sharp) {
-						cerr << v[0].inside.clipped << endl;
+						//cerr << v[0].inside.clipped << endl;
 						clipped_correctly=true;
 					} else if (d11==m && v[1].inside.sharp) {
-						cerr << v[1].inside.clipped << endl;
+						//cerr << v[1].inside.clipped << endl;
 						clipped_correctly=true;
 					} else if (d02==m && v[0].inside.sharp) {
-						cerr << v[0].inside.clipped << endl;
+						//cerr << v[0].inside.clipped << endl;
 						clipped_correctly=true;
 					} else if (d12==m && v[1].inside.sharp) {
-						cerr << v[1].inside.clipped << endl;
+						//cerr << v[1].inside.clipped << endl;
 						clipped_correctly=true;
 					}
 		
 					if (!clipped_correctly) {
-						cerr << "SKIPPING BAD CLIP! " << v[0].name << " " << v[1].name <<  endl;
+						//cerr << "SKIPPING BAD CLIP! " << v[0].name << " " << v[1].name <<  endl;
 						v.clear();
 						continue;
 					}
@@ -1104,9 +1245,13 @@ int main( int argc, char ** argv) {
 				if (min_pos_bp==1) {
 					c.b1pairs.insert(min_pos);
 					c.b2pairs.insert(max_pos);
+					c.pairs.push_back(pair<pos,pos>(min_pos,max_pos));
+					//cerr << " 1 " << min_pos.str() << " " << max_pos.str() << endl;
 				} else {
 					c.b2pairs.insert(min_pos);
 					c.b1pairs.insert(max_pos);
+					c.pairs.push_back(pair<pos,pos>(max_pos,min_pos));
+					//cerr << " 2 " << min_pos.str() << " " << max_pos.str() << endl;
 				}
 			} else {
 				//dont span, only on one side
@@ -1140,14 +1285,14 @@ int main( int argc, char ** argv) {
 		}
 	}
 
-	cout << "#BP1\tBP2\tSUPPORT\tEBP1\tEBP2\tSEBP1\tSEBP2\tSUPPORT" << endl;
+	cout << "#BP1\tBP2\tSUPPORT\tMLBP1\tMLBP2\tSEBP1\tSEBP2\tSUPPORT" << endl;
 
 	for (int cid=0; cid<clusters.size(); cid++) {
 		cluster & c = clusters[cid];
 		//if (c.b1pairs.size()>0 && c.b2pairs.size()>0) {
-			estimate_breakpoint(c);
+			pair<pos,pos> max_l = estimate_breakpoint(c);
 			cout << c.b1.str() << "\t" << c.b2.str() << "\t" << c.original_support;
-			cout << "\t" << c.b1paired.str() << "\t" << c.b2paired.str(); 
+			cout << "\t" << max_l.first.str() << "\t" << max_l.second.str(); 
 			cout << "\t" << c.b1snapped.str() << "\t" << c.b2snapped.str() << "\t" << MIN(c.b1pairs.size(),c.b2pairs.size()) << endl;
 		//}		
 	}
