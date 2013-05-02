@@ -424,7 +424,9 @@ pos snap_pos(pos p, multiset<pos> ps) {
 }
 
 
-pair<pos,pos> max_likelihood_bp(cluster & c,  pos bp1, pos bp2) {
+pair<pos,pos> max_likelihood_bp(cluster & c, double u, double sd) {
+	pos bp1 = c.b1;
+	pos bp2 = c.b2;
 	//map< pos, map< pos , double > > likelihoods;
 	//cerr << " LIKELIHOOD FOR " << bp1.str() <<  " " << bp2.str() << endl;
 	double max_likelihood=log(0);
@@ -449,35 +451,35 @@ pair<pos,pos> max_likelihood_bp(cluster & c,  pos bp1, pos bp2) {
 				pos & read_bp1 = c.pairs[i].first;	
 				pos & read_bp2 = c.pairs[i].second;
 				//cerr << read_bp1.clipped << " " << read_bp2.clipped << endl;
-				int d = (read_bp1 - a_bp) + (read_bp2 - b_bp) + read_bp1.clipped + read_bp2.clipped;
+				int d = (read_bp1 - a_bp) + (read_bp2 - b_bp);// + read_bp1.clipped + read_bp2.clipped;
 				//TODO this is wonky
-				if (bp1.strand) {
+				/*if (bp1.strand) {
 					if (read_bp1>a_bp) {
-						d+=mean;
+						d+=u;
 					}
 				} else {
 					if (read_bp1<a_bp) {
-						d+=mean;
+						d+=u;
 					}
 				}
 				if (!bp2.strand) {
 					if (read_bp2>b_bp) {
-						d+=mean;
+						d+=u;
 					}
 				} else {
 					if (read_bp2<b_bp) {
-						d+=mean;
+						d+=u;
 					}
-				}
+				}*/
 				//likelihoods[a_bp][b_bp]-=(d-mean)*(d-mean)/(2*stddev*stddev);
-				likelihood+=(-(d-mean)*(d-mean)/(2*stddev*stddev))*log(sqrt(2*3.141)*stddev);
+				likelihood+=(-(d-u)*(d-u)/(2*sd*sd));//-log(sqrt(2*3.141)*stddev);
 				//cerr << " d is " << d << endl; 
 				//cerr << read_bp1.str() << " " << read_bp2.str() << " " << d << endl;
 				sum+=d;
 			}
 			//do the clipped
 			int sz=2*BP_WIGGLE+1;
-			double p = 0.99;
+			double p = 0.999;
 			for (set<pos>::iterator sit=c.b1pc.begin(); sit!=c.b1pc.end(); sit++) {
 				if ( (a_bp-*sit)<3 ) {
 					likelihood+=log(p/5);
@@ -515,7 +517,8 @@ pair<pos,pos> max_likelihood_bp(cluster & c,  pos bp1, pos bp2) {
 	}
 	
 
-	/*cerr << "ONE " << max_bp1.str() << " " << max_bp2.str() << " " << c.b1pc.size() << " " << c.b2pc.size() << endl;
+	/*if (bp1.coord==204804717 || bp2.coord==204804717) {
+	cerr << "ONE " << max_bp1.str() << " " << max_bp2.str() << " " << c.b1pc.size() << " " << c.b2pc.size() << endl;
 	for (set<pos>::iterator sit=c.b2pc.begin(); sit!=c.b2pc.end(); sit++) {
 		pos p = *sit;
 		cerr << "\t" << p.str() << endl;
@@ -524,19 +527,20 @@ pair<pos,pos> max_likelihood_bp(cluster & c,  pos bp1, pos bp2) {
 		pos & read_bp1 = c.pairs[i].first;	
 		pos & read_bp2 = c.pairs[i].second;
 		cerr << "\t" << read_bp1.str() << "\t" << read_bp2.str() << endl;
+	}
 	}*/
 	//return pair<pos,pos>(pos(0,0,true),pos(0,0,true));
 	return pair<pos,pos>(max_bp1,max_bp2);
 }
 
-pair<pos,pos> estimate_breakpoint(cluster & c ) {
+pair<pos,pos> estimate_breakpoint(cluster & c , double u, double sd) {
 
 	if (c.b1pairs.size()==0 || c.b2pairs.size()==0) {
 		return pair<pos,pos>();
 	}
 
 	//lets try some probabilities ( well, skip it log likelihoods ;) )
-	pair<pos,pos> max_l = max_likelihood_bp(c,c.b1,c.b2);
+	pair<pos,pos> max_l = max_likelihood_bp(c,u,sd);
 	//cerr << c.pairs.size() << " " << endl;
 	//end of crazyness
 
@@ -895,6 +899,10 @@ void process_mapped_read(vector<string> v_row) {
 					my.coord+=c_len;
 				}
 				//cerr << my.str() << "SHARP" << endl;
+			} else {
+				if (my.strand) {
+					my.coord+=c_len;
+				}
 			}
 			int cid = find_cluster(my,mate);
 			if (cid!=-1) {
@@ -1234,7 +1242,11 @@ int main( int argc, char ** argv) {
 
 	int t27 =0;
 
+
+	map<int, vector<int> > c_normals;
+
 	for (map<string, vector<cread> >::iterator mit=reads.begin(); mit!=reads.end(); mit++) {
+		int dropped_reads=0;
 		const string & qname = mit->first;
 		vector<cread> & v = mit->second;
 		if (v.size()>2) {
@@ -1250,10 +1262,14 @@ int main( int argc, char ** argv) {
 				max_pos = v[1].inside;
 				min_pos = v[0].inside;
 			}	
-
+			
 			if (normal_pair(min_pos,max_pos)) {
 				if ( !v[0].inside.sharp && !v[1].inside.sharp) {
 					//drop it, it's too normal
+					c_normals[v[0].cid].push_back(max_pos-min_pos);	
+					if (v[0].cid!=v[1].cid){
+						c_normals[v[1].cid].push_back(max_pos-min_pos);	
+					}
 					v.clear();
 					continue;
 				}
@@ -1391,12 +1407,30 @@ int main( int argc, char ** argv) {
 		}
 	}
 
+	for (map<int, vector<int> >::iterator mit=c_normals.begin(); mit!=c_normals.end(); mit++) {
+	}
+
 	cout << "#BP1\tBP2\tSUPPORT\tMLBP1\tMLBP2\tSEBP1\tSEBP2\tSUPPORT" << endl;
 
 	for (int cid=0; cid<clusters.size(); cid++) {
+		double sum=0.0;
+		double u=0.0;
+		for (int i=0; i<c_normals[cid].size(); i++) {
+			sum+=c_normals[cid][i];
+		}
+		u=sum/c_normals[cid].size();
+		sum=0.0;
+		for (int i=0; i<c_normals[cid].size(); i++) {
+			sum+=(u-c_normals[cid][i])*(u-c_normals[cid][i]);
+		} 
+		double variance = sum/c_normals[cid].size();
+		
+		double sd = sqrt(variance);
+
+		cerr << cid << " " << u << " " << sd << endl;
 		cluster & c = clusters[cid];
 		//if (c.b1pairs.size()>0 && c.b2pairs.size()>0) {
-			pair<pos,pos> max_l = estimate_breakpoint(c);
+			pair<pos,pos> max_l = estimate_breakpoint(c,u,sd);
 			cout << c.b1.str() << "\t" << c.b2.str() << "\t" << c.original_support;
 			cout << "\t" << max_l.first.str() << "\t" << max_l.second.str(); 
 			cout << "\t" << c.b1snapped.str() << "\t" << c.b2snapped.str() << "\t" << MIN(c.b1pairs.size(),c.b2pairs.size()) << endl;
