@@ -32,6 +32,8 @@ using namespace std;
 
 #define SHARP_BP	20
 
+#define READ_LENGTH	100
+
 class pos {
 	public:
 		bool marked;
@@ -419,6 +421,7 @@ pos snap_pos(pos p, multiset<pos> ps) {
 
 pair<pos,pos> max_likelihood_bp(cluster & c,  pos bp1, pos bp2) {
 	//map< pos, map< pos , double > > likelihoods;
+	//cerr << " LIKELIHOOD FOR " << bp1.str() <<  " " << bp2.str() << endl;
 	double max_likelihood=log(0);
 	pos max_bp1=pos(0,0,true);
 	pos max_bp2=pos(0,0,true);
@@ -441,7 +444,7 @@ pair<pos,pos> max_likelihood_bp(cluster & c,  pos bp1, pos bp2) {
 				pos & read_bp1 = c.pairs[i].first;	
 				pos & read_bp2 = c.pairs[i].second;
 				//cerr << read_bp1.clipped << " " << read_bp2.clipped << endl;
-				int d = (read_bp1 - a_bp) + (read_bp2 - b_bp) + read_bp1.clipped + read_bp2.clipped;
+				int d = 2*READ_LENGTH+ (read_bp1 - a_bp) + (read_bp2 - b_bp) + read_bp1.clipped + read_bp2.clipped;
 				//TODO this is wonky
 				if (bp1.strand) {
 					if (read_bp1>a_bp) {
@@ -469,7 +472,7 @@ pair<pos,pos> max_likelihood_bp(cluster & c,  pos bp1, pos bp2) {
 			}
 			//do the clipped
 			int sz=2*BP_WIGGLE+1;
-			double p = 0.9;
+			double p = 0.99;
 			for (set<pos>::iterator sit=c.b1pc.begin(); sit!=c.b1pc.end(); sit++) {
 				if ( (a_bp-*sit)<3 ) {
 					likelihood+=log(p/5);
@@ -507,19 +510,29 @@ pair<pos,pos> max_likelihood_bp(cluster & c,  pos bp1, pos bp2) {
 	}
 	
 
-	//cerr << "ONE " << max_bp1.str() << " " << max_bp2.str() << endl;
+	/*cerr << "ONE " << max_bp1.str() << " " << max_bp2.str() << " " << c.b1pc.size() << " " << c.b2pc.size() << endl;
+	for (set<pos>::iterator sit=c.b2pc.begin(); sit!=c.b2pc.end(); sit++) {
+		pos p = *sit;
+		cerr << "\t" << p.str() << endl;
+	}
+	for (int i=0; i<c.pairs.size(); i++) {
+		pos & read_bp1 = c.pairs[i].first;	
+		pos & read_bp2 = c.pairs[i].second;
+		cerr << "\t" << read_bp1.str() << "\t" << read_bp2.str() << endl;
+	}*/
 	//return pair<pos,pos>(pos(0,0,true),pos(0,0,true));
 	return pair<pos,pos>(max_bp1,max_bp2);
 }
 
 pair<pos,pos> estimate_breakpoint(cluster & c ) {
+
 	if (c.b1pairs.size()==0 || c.b2pairs.size()==0) {
 		return pair<pos,pos>();
 	}
 
-
 	//lets try some probabilities ( well, skip it log likelihoods ;) )
 	pair<pos,pos> max_l = max_likelihood_bp(c,c.b1,c.b2);
+	//cerr << c.pairs.size() << " " << endl;
 	//end of crazyness
 
 	if (c.b1.strand) {
@@ -566,6 +579,7 @@ int find_cluster(pos  a, pos  b) {
 	set<int> intersection;
 	for (set<int>::iterator sit=foota.begin(); sit!=foota.end(); sit++) {
 		for (set<int>::iterator ssit=footb.begin(); ssit!=footb.end(); ssit++) {
+			//cerr << *sit << " vs " << *ssit << endl;
 			if (*sit==*ssit) {
 				intersection.insert(*sit);
 			}
@@ -580,30 +594,94 @@ int find_cluster(pos  a, pos  b) {
 	for (set<int>::iterator sit=intersection.begin(); sit!=intersection.end(); sit++) {
 		cluster & c = clusters[*sit];
 		//if the pair spans then check strands
-		bool a_b1 = (c.b1-a)<(c.b2-a); // a belongs to b1
-		bool b_b1 = (c.b1-b)<(c.b2-b); // b belongs to b1
+		//cerr << " NORMAL " << (normal_pair(a,b) ? "T" : "F") << endl;
+		//cerr << "CHECK " <<  a.str() << " " << b.str() << "\t" << c.b1.str() << " " << c.b2.str() << endl;
+		if (!normal_pair(a,b)) {
+			bool a_b1 = (c.b1-a)<(c.b2-a); // a belongs to b1
+			bool b_b1 = (c.b1-b)<(c.b2-b); // b belongs to b1
 
-		if (a_b1!=b_b1) {
-			//spans, check strands
-			if (a_b1) {
-				if (a.strand!=c.b1.strand || b.strand==c.b2.strand) {
-					continue;
+			//cerr << "CHECK " <<  a.str() << " " << b.str() << "\t" << c.b1.str() << " " << c.b2.str() << " " << a_b1 << " " << b_b1 << endl;
+			if (a_b1!=b_b1) {
+				//spans, check strands
+				if (a_b1) {
+					if (a.strand!=c.b1.strand || b.strand==c.b2.strand) {
+						continue;
+					}
+				} else {
+					if (b.strand!=c.b1.strand || a.strand==c.b2.strand) {
+						continue;
+					}
+				}	
+			}	
+
+			unsigned int cd = MIN(a-c.b1,a-c.b2)+MIN(b-c.b1,b-c.b2);
+			if (cd<d) {
+				d=cd;
+				cid=*sit;
+			}
+		} else {
+			int d1=(a-c.b1)+(b-c.b1);
+			int d2=(a-c.b2)+(b-c.b2);
+			if (d1<d2) {
+				//means both closer to b1
+				if (c.b1.strand) {
+					if ( (a-c.b1) < (b-c.b1) ) {
+						//a closer to b1
+						if (a.strand) {
+							continue;
+						}
+					} else {
+						if (b.strand) {
+							continue;
+						}
+					}
+				} else {
+					if ( (a-c.b1) < (b-c.b1) ) {
+						//a closer to b1
+						if (!a.strand) {
+							continue;
+						}
+					} else {
+						if (!b.strand) {
+							continue;
+						}
+					}
 				}
 			} else {
-				if (b.strand!=c.b1.strand || a.strand==c.b2.strand) {
-					continue;
+				//means both closer to bp2
+				//means both closer to b1
+				if (!c.b2.strand) {
+					if ( (a-c.b2) < (b-c.b2) ) {
+						//a closer to b1
+						if (!a.strand) {
+							continue;
+						}
+					} else {
+						if (!b.strand) {
+							continue;
+						}
+					}
+				} else {
+					if ( (a-c.b2) < (b-c.b2) ) {
+						//a closer to b1
+						if (a.strand) {
+							continue;
+						}
+					} else {
+						if (b.strand) {
+							continue;
+						}
+					}
 				}
-			}	
-		}	
 
-		unsigned int cd = MIN(a-c.b1,a-c.b2)+MIN(b-c.b1,b-c.b2);
-		if (cd<d) {
-			d=cd;
-			cid=*sit;
+			}
+			unsigned int cd = MIN((a-c.b1)+(b-c.b1),(a-c.b2)+(b-c.b2));
+			if (cd<d) {
+				d=cd;
+				cid=*sit;
+			}
 		}
-		//cerr << "CHECK " <<  c.b1.str() << " " << c.b2.str() << endl;
-	}	
-
+	}
 	if (cid!=-1) {
 		cluster & c = clusters[cid];
 		//cerr << "X" << c.b1.str() << " " << c.b2.str() << endl;
@@ -805,7 +883,6 @@ void process_mapped_read(vector<string> v_row) {
 		}
 
 		
-
 		if (normal_pair(my,mate)) {
 			//this is kinda normal
 			if (my.sharp) {
@@ -816,7 +893,7 @@ void process_mapped_read(vector<string> v_row) {
 			}
 			int cid = find_cluster(my,mate);
 			if (cid!=-1) {
-				//cerr << cid << endl;
+				//cerr << " FOUND IT A HOME" <<  cid << endl;
 				int id = reads[qname].size();
 				cread r = cread(qname,id,my,cid);
 				reads[qname].push_back(r);
@@ -856,6 +933,10 @@ void process_mapped_read(vector<string> v_row) {
 
 }
 
+
+
+
+
 void process_unmapped_read(vector<string> v_row) {
 	int flags = atoi(v_row[1].c_str());
 	string qname = v_row[0];
@@ -886,6 +967,8 @@ void process_unmapped_read(vector<string> v_row) {
 		unsigned int d1 = mate-c.b1;
 		unsigned int d2 = mate-c.b2;
 
+
+		//TODO this should be informed by the other pair as well!!!!!!
 		int mate_belongs_to_bp = (d1 < d2 ? 1 : 2);
 
 		if (d1==-1 && d2==-1) {
@@ -1163,9 +1246,7 @@ int main( int argc, char ** argv) {
 				min_pos = v[0].inside;
 			}	
 
-
 			if (normal_pair(min_pos,max_pos)) {
-
 				if ( !v[0].inside.sharp && !v[1].inside.sharp) {
 					//drop it, it's too normal
 					v.clear();
@@ -1214,7 +1295,8 @@ int main( int argc, char ** argv) {
 				continue;
 			}
 
-			//if one did not have a cid assigned, assign it now	
+			//if one did not have a cid assigned, assign it now
+			//cerr << v[0].cid << " " << v[1].cid << endl;	
 			int cid=MAX(v[0].cid,v[1].cid);
 
 			//lets check if the span the break
@@ -1237,6 +1319,26 @@ int main( int argc, char ** argv) {
 			} else {
 				cerr << "EERRRO " << endl;
 				continue;
+			}
+
+			//lets see if we can break the tie easily
+			//breaking tie in case of small inversions when deciding between 
+			//spanning or one sided (if bp is moved)
+			if (min_pos_bp==max_pos_bp && min_pos.strand!=max_pos.strand) {
+				if (min_pos_bp==1) {
+					if (min_pos.strand==c.b1.strand && (max_pos-c.b2)<2*mean) {
+						max_pos_bp=2;
+					} else if (max_pos.strand==c.b1.strand && (min_pos-c.b2)<2*mean) {
+						min_pos_bp=2;
+					}
+				} else {
+					if (min_pos.strand!=c.b2.strand && (max_pos-c.b1)<2*mean) {
+						max_pos_bp=1;
+					} else if (max_pos.strand!=c.b2.strand && (min_pos-c.b1)<2*mean) {
+						min_pos_bp=1;
+					}
+					
+				}
 			}
 
 
@@ -1280,7 +1382,6 @@ int main( int argc, char ** argv) {
 					c.b2pc.insert(max_pos);
 				}
 			}
-
 
 		}
 	}
