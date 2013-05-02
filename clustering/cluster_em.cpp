@@ -17,7 +17,7 @@ using namespace std;
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
-#define BP_WIGGLE	170
+#define BP_WIGGLE	70
 
 #define UNMAPPED        0x4
 #define M_UNMAPPED      0x8
