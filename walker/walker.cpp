@@ -559,6 +559,12 @@ void read_links(char * filename) {
 		int normal=(bp_support[posa]+bp_support[posb])/4; //the lambda , average of two sites (2 copies each)
 		int tumor=support;	
 
+		edge e = edge(posa,posb,false);
+		if (somatic_edges.find(e)!=somatic_edges.end() && somatic_edges[e].tumor>=ei.tumor) {
+			//skip this already have a better one
+			cerr << "SKipping edge " << buffer << endl;
+			continue;
+		}
 
 		//set up the ei
 		ei.length=0;
@@ -570,7 +576,6 @@ void read_links(char * filename) {
 		
 
 		//put in the forward
-		edge e = edge(posa,posb,false);
 		somatic_edges[e]=ei;
 
 		//put in the reverse
