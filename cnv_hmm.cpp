@@ -528,9 +528,19 @@ void read_cov(char * filename, bool normal) {
 	}
 	} //end openmp section
 	cerr << " done processing " << endl;
-	
+
+
+	//lets take out the weird sections from the fractionization
+	unsigned long total_coverage_norm = 0;
 	for (map<edge,edge_info>::iterator mit=edges.begin(); mit!=edges.end(); mit++) {
-		if (normal) {
+
+	}
+
+
+
+	for (map<edge,edge_info>::iterator mit=edges.begin(); mit!=edges.end(); mit++) {
+	
+		if (!normal) {
 			total_cancer_coverage=total_coverage;
 			edges[mit->first].normal_coverage/=total_coverage;
 		} else {
@@ -915,8 +925,8 @@ int main(int argc, char ** argv) {
 				//initialize
 				e=edge(e.posa,current);
 				edge_info ei = re_edges(e);
-				normal=total_normal_coverage*ei.cancer_coverage/100;
-				cancer=(total_normal_coverage*ei.normal_coverage/100)/2;
+				cancer=total_normal_coverage*ei.cancer_coverage/100;
+				normal=(total_normal_coverage*ei.normal_coverage/100)/2;
 				cp=re_edges(e).copy_number;
 				if (re_free_edges(current).size()!=0) {
 					cout << cp << "\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << e.length() << "\t" << normal << "\t" << cancer << endl;
@@ -932,8 +942,8 @@ int main(int argc, char ** argv) {
 					//add it
 					e.posb=current;
 					edge_info xei = re_edges(xe);
-					normal+=total_normal_coverage*xei.cancer_coverage/100;
-					cancer+=(total_normal_coverage*xei.normal_coverage/100)/2;
+					cancer+=total_normal_coverage*xei.cancer_coverage/100;
+					normal+=(total_normal_coverage*xei.normal_coverage/100)/2;
 					if (re_free_edges(current).size()!=0) {
 						cout << cp << "\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << e.length() << "\t" << normal << "\t" << cancer << endl;
 						e=edge(current,current);
@@ -945,8 +955,8 @@ int main(int argc, char ** argv) {
 					cout << cp << "\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << e.length() << "\t" << normal << "\t" << cancer << endl;
 					e=edge(e.posb,current);
 					edge_info ei = re_edges(e);
-					normal=total_normal_coverage*ei.cancer_coverage/100;
-					cancer=(total_normal_coverage*ei.normal_coverage/100)/2;
+					cancer=total_normal_coverage*ei.cancer_coverage/100;
+					normal=(total_normal_coverage*ei.normal_coverage/100)/2;
 					cp=xcp;
 					if (re_free_edges(current).size()!=0) {
 						cout << cp << "\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << e.length() << "\t" << normal << "\t" << cancer << endl;
