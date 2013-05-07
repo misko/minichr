@@ -335,6 +335,18 @@ int to_chr(const char * s) {
 
 //read in the edges from clustering
 void read_links(char * filename) {
+
+
+	//insert the stoppers
+	unsigned int lengths[]={249250621,243199373,198022430,191154276,180915260,171115067,159138663,146364022,141213431,135534747,135006516,133851895,115169878,107349540,102531392,90354753,81195210,78077248,59128983,63025520,51304566,48129895,155270560,59373566,16571};
+	for (int i=0; i<25; i++) {
+		pos p = pos(i+1,2);
+		bps.insert(p);
+		p = pos(i+1,lengths[i]);
+		bps.insert(p);
+	}
+		
+
 	ifstream f (filename);
 	//char chr[10]="";
 	unsigned int bpa,bpb,l_from,l_to,cluster_idx;
@@ -378,6 +390,8 @@ void read_links(char * filename) {
 		//}
 		
 
+		
+	
 		//add the one direction
 		edge ea = edge(posa,posb);
 
