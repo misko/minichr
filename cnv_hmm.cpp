@@ -63,7 +63,7 @@ class edge {
 		edge(pos posa, pos posb);
 		edge reverse();
 		edge();
-		unsigned int length();
+		unsigned int length() const;
 		bool operator<(const edge &other) const;
 		bool operator>(const edge &other) const;
 		bool operator==(const edge &other) const;
@@ -213,7 +213,7 @@ edge edge::reverse() {
 	return edge(posb,posa);
 }
 
-unsigned int edge::length() {
+unsigned int edge::length() const {
 	if (posa.chr==posb.chr) {
 		if (posa.coord>posb.coord) {
 			return posa.coord-posb.coord;
