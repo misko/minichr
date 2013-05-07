@@ -507,6 +507,8 @@ void read_cov(char * filename, bool normal) {
 		if (prev.chr==chr) {
 			edge ea = edge(prev,*it);
 			edge eb = ea.reverse();
+			total_length_t+=(*it).coord-prev.coord;
+
 			if (normal) {
 				edges_t[ea].normal_coverage+=cov;
 				edges_t[eb].normal_coverage+=cov;
@@ -526,6 +528,7 @@ void read_cov(char * filename, bool normal) {
 		for (map<edge,edge_info>::iterator mit=edges_t.begin(); mit!=edges_t.end(); mit++) {
 			edges[mit->first].normal_coverage+=mit->second.normal_coverage;
 			edges[mit->first].cancer_coverage+=mit->second.cancer_coverage;
+			total_length+=total_length_t;
 		}
 	}
 	} //end openmp section
@@ -533,10 +536,17 @@ void read_cov(char * filename, bool normal) {
 
 
 	//lets take out the weird sections from the fractionization
-	unsigned long total_coverage_norm = 0;
-	double average = ((double)total_coverage)/1;
+	unsigned long total_coverage_effective = 0;
+	double average = ((double)total_coverage)/((double)total_length);
 	for (map<edge,edge_info>::iterator mit=edges.begin(); mit!=edges.end(); mit++) {
 
+		if (normal && (mit->first).length()*average*5>=edges[mit->first].normal_coverage) {
+			total_coverage_effective+=edges[mit->first].normal_coverage;
+		}	
+		
+		if (!normal && (mit->first).length()*average*5>=edges[mit->first].cancer_coverage) {
+			total_coverage_effective+=edges[mit->first].normal_coverage;
+		}
 	}
 
 
@@ -715,8 +725,14 @@ int main(int argc, char ** argv) {
 			edge e = edge(p,c);
 			//cout << p.str() << "\t" << c.str() << endl; 
 			edge_info ei = re_edges(e);
-			unsigned long cancer_coverage = 1+total_normal_coverage*ei.cancer_coverage/100;
-			unsigned long normal_coverage = 1+(total_normal_coverage*ei.normal_coverage/100)/2;
+			unsigned long cancer_coverage = total_normal_coverage*ei.cancer_coverage/100;
+			if (cancer_coverage==0) {
+				cancer_coverage++;
+			}
+			unsigned long normal_coverage = (total_normal_coverage*ei.normal_coverage/100)/2;
+			if (normal_coverage==0) {
+				normal_coverage++;
+			}
 			//cout << normal_coverage << endl;		
 
 
@@ -725,7 +741,7 @@ int main(int argc, char ** argv) {
 			for (int i=0; i<5; i++) {
 				if (normal_coverage>=30) {
 					if (i==0) {
-						emission[i]=-((double)normal_coverage*0.1)+cancer_coverage*log((normal_coverage*0.1));
+						emission[i]=-(((double)normal_coverage)*0.3)+cancer_coverage*log((((double)normal_coverage)*0.3));
 					} else {
 						emission[i]=-((double)normal_coverage*i)+cancer_coverage*log((normal_coverage*i));
 					}
