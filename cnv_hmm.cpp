@@ -459,6 +459,7 @@ void read_cov(char * filename, bool normal) {
 
 	unsigned int entries = sz/soe;
 	unsigned long total_coverage=0;
+	unsigned long total_length=0;
 
 	cerr << "started processing" << endl;
 
@@ -470,6 +471,7 @@ void read_cov(char * filename, bool normal) {
 	unsigned int thread_id = omp_get_thread_num();
 	//cerr << "thread " <<  thread_id << endl;
 	unsigned long total_coverage_t=0;
+	unsigned long total_length_t=0;
 
 	map<edge, edge_info > edges_t;
 
@@ -532,6 +534,7 @@ void read_cov(char * filename, bool normal) {
 
 	//lets take out the weird sections from the fractionization
 	unsigned long total_coverage_norm = 0;
+	double average = ((double)total_coverage)/
 	for (map<edge,edge_info>::iterator mit=edges.begin(); mit!=edges.end(); mit++) {
 
 	}
@@ -540,11 +543,11 @@ void read_cov(char * filename, bool normal) {
 
 	for (map<edge,edge_info>::iterator mit=edges.begin(); mit!=edges.end(); mit++) {
 	
-		if (!normal) {
-			total_cancer_coverage=total_coverage;
+		if (normal) {
+			total_normal_coverage=total_coverage;
 			edges[mit->first].normal_coverage/=total_coverage;
 		} else {
-			total_normal_coverage=total_coverage;
+			total_cancer_coverage=total_coverage;
 			edges[mit->first].cancer_coverage/=total_coverage;
 		}
 	}
@@ -929,7 +932,7 @@ int main(int argc, char ** argv) {
 				normal=(total_normal_coverage*ei.normal_coverage/100)/2;
 				cp=re_edges(e).copy_number;
 				if (re_free_edges(current).size()!=0) {
-					cout << cp << "\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << e.length() << "\t" << normal << "\t" << cancer << endl;
+					cout << cp << "\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << e.length() << "\t" << cancer << "\t" << normal << endl;
 					e=edge(current,current);
 					normal=0;
 					cancer=0;
@@ -945,21 +948,21 @@ int main(int argc, char ** argv) {
 					cancer+=total_normal_coverage*xei.cancer_coverage/100;
 					normal+=(total_normal_coverage*xei.normal_coverage/100)/2;
 					if (re_free_edges(current).size()!=0) {
-						cout << cp << "\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << e.length() << "\t" << normal << "\t" << cancer << endl;
+						cout << cp << "\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << e.length() << "\t" << cancer << "\t" << normal << endl;
 						e=edge(current,current);
 						normal=0;
 						cancer=0;
 					}
 				} else {
 					//print and start again
-					cout << cp << "\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << e.length() << "\t" << normal << "\t" << cancer << endl;
+					cout << cp << "\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << e.length() << "\t" << cancer << "\t" << normal << endl;
 					e=edge(e.posb,current);
 					edge_info ei = re_edges(e);
 					cancer=total_normal_coverage*ei.cancer_coverage/100;
 					normal=(total_normal_coverage*ei.normal_coverage/100)/2;
 					cp=xcp;
 					if (re_free_edges(current).size()!=0) {
-						cout << cp << "\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << e.length() << "\t" << normal << "\t" << cancer << endl;
+						cout << cp << "\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << e.length() << "\t" << cancer << "\t" << normal << endl;
 						e=edge(current,current);
 						normal=0;
 						cancer=0;
