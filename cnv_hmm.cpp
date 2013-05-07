@@ -534,7 +534,7 @@ void read_cov(char * filename, bool normal) {
 
 	//lets take out the weird sections from the fractionization
 	unsigned long total_coverage_norm = 0;
-	double average = ((double)total_coverage)/
+	double average = ((double)total_coverage)/1;
 	for (map<edge,edge_info>::iterator mit=edges.begin(); mit!=edges.end(); mit++) {
 
 	}
