@@ -741,7 +741,7 @@ int main(int argc, char ** argv) {
 			for (int i=0; i<5; i++) {
 				if (normal_coverage>=30) {
 					if (i==0) {
-						emission[i]=-(((double)normal_coverage)*0.3)+cancer_coverage*log((((double)normal_coverage)*0.3));
+						emission[i]=-(((double)normal_coverage)*0.1)+cancer_coverage*log((((double)normal_coverage)*0.1));
 					} else {
 						emission[i]=-((double)normal_coverage*i)+cancer_coverage*log((normal_coverage*i));
 					}
