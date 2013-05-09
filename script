@@ -29,8 +29,8 @@ cat tumor | while read line; do
 	#now get the arc coverages
 	normal_mean=`cat DIPG${s}N*/mean_and_std.txt | awk '{print $1}'`
 	normal_std=`cat DIPG${s}N*/mean_and_std.txt | awk '{print $2}'`
-	cat dipg${s}t_nsubtract_centrosubtract_1000bp_joined | grep chr  | awk '{print $1"\t"$2; print $4"\t"$5; }' | sort | uniq > dipg${s}t_nsubtract_centrosubtract_1000bp_joined_intervals
-	~/samtools view $line/clusters/normal_uniq.bam | ./scripts/minichr/arc_coverage/arc_coverage ${normal_mean} ${normal_std} dipg${s}t_nsubtract_centrosubtract_1000bp_joined_intervals > dipg${s}t_nsubtract_centrosubtract_1000bp_joined_arc_coveage
+	cat $line/dipg${s}t_nsubtract_centrosubtract_1000bp_joined | grep chr  | awk '{print $1"\t"$2; print $4"\t"$5; }' | sort | uniq > $line/dipg${s}t_nsubtract_centrosubtract_1000bp_joined_intervals
+	~/samtools view $line/clusters/normal_uniq.bam | ./scripts/minichr/arc_coverage/arc_coverage ${normal_mean} ${normal_std} $line/dipg${s}t_nsubtract_centrosubtract_1000bp_joined_intervals > $line/dipg${s}t_nsubtract_centrosubtract_1000bp_joined_arc_coveage
 
 done
 
