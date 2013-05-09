@@ -16,7 +16,7 @@
 
 #define LARGE_COMPONENT 4
 
-#define	SZ	100	//max ocpy count
+#define	SZ	400	//max ocpy count
 #define MAX_WALK	180
 #define MAX_REUSE	2
 #define MIN_CP	1
@@ -466,23 +466,32 @@ void read_edges(char * filename) {
 
 		if (cp>2) {
 			//insert the nodes
-			bps.insert(pos(ichra,coorda));
-			bps.insert(pos(ichrb,coordb));
+			pos from = pos(ichra,coorda);
+			pos middle = pos(ichra,(coorda+coordb)/2);
+			pos to = pos(ichrb,coordb);
+
+			bps.insert(from);
+			bps.insert(middle);
+			bps.insert(to);
+
 
 			//add the edges
-			edge e = edge(pos(ichra,coorda),pos(ichrb,coordb),true);
+			edge efm = edge(from,middle,true);
+			edge emt = edge(middle,to,true);
 	
 			edge_info ei;
-			ei.length=length;
+			ei.length=length/2;
 			ei.type=0;
 			ei.hmm_copy_number=cp;
 
-			ei.normal=normal;
-			ei.tumor=tumor;
+			ei.normal=normal/2;
+			ei.tumor=tumor/2;
 			ei.poisson();
 
-			genomic_edges[e]=ei;
-			genomic_edges[e.reverse()]=ei;
+			genomic_edges[efm]=ei;
+			genomic_edges[efm.reverse()]=ei;
+			genomic_edges[emt]=ei;
+			genomic_edges[emt.reverse()]=ei;
 			
 		}
 		
@@ -1320,7 +1329,6 @@ int main ( int argc, char ** argv) {
 	set<int> large_components;
 	for (map<pos,int>::iterator mit = connected_components.begin(); mit!=connected_components.end(); mit++) {
 		connected_components_sizes[mit->second]++;
-			
 	}
 
 	//lets find the max comopnent and look at that
