@@ -15,6 +15,8 @@ genomic_edges={}
 somatic_edges={}
 all_edges={}
 
+expected={}
+
 break_points=set()
 
 def to_pos(s):
@@ -60,6 +62,10 @@ def read_problem_file(filename):
 				somatic_edges[(f,t)]=[]
 			somatic_edges[(f,t)].append((cost,False,typ))
 			somatic_edges[(f,t)].append((cost,False,typ))
+			if (f,t) not in expected:
+				expected[(f,t)]=0
+			if cost<0:
+				expected[(f,t)]+=1
 			break_points.add(f)
 			break_points.add(t)
 		elif line[1]=='Genomic':
@@ -71,6 +77,10 @@ def read_problem_file(filename):
 				print >> sys.stderr, "ERROR" 
 				sys.exit(1)
 			cost=int(line[4])
+			if (f,t) not in expected:
+				expected[(f,t)]=0
+			if cost<0:
+				expected[(f,t)]+=1
 			if (f,t) not in genomic_edges:
 				genomic_edges[(f,t)]=[]
 			genomic_edges[(f,t)].append((cost,True,0))
@@ -142,7 +152,7 @@ def read_flow_file(filename):
 		if (f,t) in used:
 			u=int(used[(f,t)]['somatic']*scale)
 		if keep_empty or u!=0:
-			l_somatic_edges.append((f,t,somatic_edges[(f,t)][0][2],u))
+			l_somatic_edges.append((f,t,somatic_edges[(f,t)][0][2],u,expected[(f,t)]))
 			used_breakpoints.add(f)
 			used_breakpoints.add(t)
 
@@ -156,35 +166,35 @@ def read_flow_file(filename):
 	
 		if f not in used_breakpoints and len(l_genomic_edges)>0 and l_genomic_edges[-1][1]==f and l_genomic_edges[-1][3]==u:
 			#add it to the previous
-			l_genomic_edges[-1]=(l_genomic_edges[-1][0],t,0,u)
+			l_genomic_edges[-1]=(l_genomic_edges[-1][0],t,0,u,expected[f,t])
 		else:
 			if len(l_genomic_edges)>0 and l_genomic_edges[-1][0][0]==f[0] and 0<f[1]-l_genomic_edges[-1][1][1]<smooth:
-				l_genomic_edges.append((l_genomic_edges[-1][1],f,0,0))
-			l_genomic_edges.append((f,t,0,u))
+				l_genomic_edges.append((l_genomic_edges[-1][1],f,0,0,expected[(l_genomic_edges[-1][1],f)]))
+			l_genomic_edges.append((f,t,0,u,expected[(f,t)]))
 
 	if not keep_empty and len(l_genomic_edges)>1:
 		to_remove=[]
 		#check front
-		(f,t,y,u)=l_genomic_edges[0]
-		(nf,nt,ny,nu)=l_genomic_edges[1]
+		(f,t,y,u,e)=l_genomic_edges[0]
+		(nf,nt,ny,nu,ne)=l_genomic_edges[1]
 		if u==0 and f not in used_breakpoints and t not in used_breakpoints and t!=nf:
-			to_remove.append((f,t,y,u))
+			to_remove.append((f,t,y,u,e))
 		#check back
-		(f,t,y,u)=l_genomic_edges[-1]
-		(pf,pt,py,pu)=l_genomic_edges[1]
+		(f,t,y,u,e)=l_genomic_edges[-1]
+		(pf,pt,py,pu,pe)=l_genomic_edges[1]
 		if u==0 and f not in used_breakpoints and t not in used_breakpoints and f!=pt:
-			to_remove.append((f,t,y,u))
+			to_remove.append((f,t,y,u,e))
 		#check middle
 		for x in range(1,len(l_genomic_edges)-1):
-			(pf,pt,py,pu)=l_genomic_edges[x-1]
-			(f,t,y,u)=l_genomic_edges[x]
-			(nf,nt,ny,nu)=l_genomic_edges[x+1]
+			(pf,pt,py,pu,pe)=l_genomic_edges[x-1]
+			(f,t,y,u,e)=l_genomic_edges[x]
+			(nf,nt,ny,nu,ne)=l_genomic_edges[x+1]
 			if u==0 and f not in used_breakpoints and t not in used_breakpoints and f!=pt and t!=nf:
-				to_remove.append((f,t,y,u))
+				to_remove.append((f,t,y,u,e))
 			elif u==0 and nf!=t and t not in used_breakpoints:
-				to_remove.append((f,t,y,u))
+				to_remove.append((f,t,y,u,e))
 			elif u==0 and f!=pt and f not in used_breakpoints:
-				to_remove.append((f,t,y,u))
+				to_remove.append((f,t,y,u,e))
 		for x in to_remove:
 			l_genomic_edges.remove(x)
 			
