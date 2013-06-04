@@ -13,6 +13,7 @@ unsigned short get_chr(const char * s) {
 	if (s[3]=='m' || s[3]=='M') {
 		return 25;
 	}
+
 	return atoi(s+3);
 }
 
@@ -38,6 +39,9 @@ int main (int argc, char ** argv) {
 		cin>>chr>>pos>>nucleo>>dp;
 		//cout<<pos<<" "<<dp<<endl;
 		unsigned short ichr=get_chr(chr.c_str());
+		if (ichr==0 || ichr>25) {
+			continue;
+		} 
 		fwrite(&ichr,sizeof(unsigned short),1,fp);
 		fwrite(&pos,sizeof(unsigned int),1,fp);
 		fwrite(&dp,sizeof(unsigned short),1,fp);
