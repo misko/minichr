@@ -394,6 +394,9 @@ pos process_read(vector<string> & v_row) {
 		if ((flags & UNMAPPED)==0) {
 			string qname = v_row[0];
 			int my_chr = to_chr(v_row[2].c_str());
+			if (my_chr==0 || my_chr>25) {
+				return min_pos;				
+			}
 			unsigned long my_pos = atol(v_row[3].c_str());
 			bool my_strand = ((flags & REVERSE)==0);
 
@@ -409,6 +412,9 @@ pos process_read(vector<string> & v_row) {
 				int mate_chr = my_chr;
 				if (v_row[6].c_str()[0]!='=') {
 					mate_chr = to_chr(v_row[6].c_str());	
+					if (mate_chr==0 || mate_chr>25) {
+						return min_pos;				
+					}
 				}
 				unsigned long mate_pos = atol(v_row[7].c_str());
 				bool mate_strand = ((flags & M_REVERSE)==0);
