@@ -460,7 +460,7 @@ pos process_read(vector<string> & v_row) {
 					return min_pos;
 				}
 
-				cerr << qname << "\t" <<  (mate_strand ? "+" : "-") << " and " << (my_strand ? "+" : "-") << " Min pos " << (min_pos.strand ? "+" : "-") << endl;
+				//cerr << qname << "\t" <<  (mate_strand ? "+" : "-") << " and " << (my_strand ? "+" : "-") << " Min pos " << (min_pos.strand ? "+" : "-") << endl;
 
 				if (my.strand) {
 					my.coord+=c_len;
