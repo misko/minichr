@@ -438,7 +438,8 @@ pos process_read(vector<string> & v_row) {
 				bool is_normal_pair=true;
 				if (mate_strand==my_strand) {
 					is_normal_pair=false;
-				} else if (!min_pos.strand) {
+				} else if (!min_pos.strand && isize>110) {
+					//TODO assume read size is 100
 					is_normal_pair=false;
 				} else if (isize>=(WEIRD_STDDEV*stddev+mean)) {
 					is_normal_pair=false;
@@ -459,6 +460,7 @@ pos process_read(vector<string> & v_row) {
 					return min_pos;
 				}
 
+				cerr << qname << "\t" <<  (mate_strand ? "+" : "-") << " and " << (my_strand ? "+" : "-") << " Min pos " << (min_pos.strand ? "+" : "-") << endl;
 
 				if (my.strand) {
 					my.coord+=c_len;
