@@ -130,7 +130,8 @@ bool normal_pair(const pos & a, const pos & b) {
 
 	if (max_pos.strand==min_pos.strand) {
 		return false;
-	} else if (!min_pos.strand) {
+		//TODO hardcoded readsize of 110
+	} else if (!min_pos.strand && isize>110) {
 		return false;
 	} else if (isize>=(WEIRD_STDDEV*stddev+mean)) {
 		return false;
