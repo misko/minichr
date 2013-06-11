@@ -437,16 +437,18 @@ void read_cov(char * filename, bool normal) {
 		cerr << " FALLED TO MALLOC " << endl;
 		exit(1);
 	}
+	
+	/*cerr << "WARNING" << endl;
 
 	//the read shunt
-	/*for (int i=0; i<2; i++) {
+	for (int i=0; i<2; i++) {
 		size_t read = fread(buffer+size_so_far,1,chunk,fptr);
 		size_so_far+=read;
 		cerr << "Warning!!!!" << endl;
 		buffer=(char*)realloc(buffer,size_so_far+chunk);
 	}
-	size_so_far=(size_so_far/soe)*soe;
-	*/
+	size_so_far=(size_so_far/soe)*soe;*/
+	
 
 	
 	//the real read loop
@@ -491,7 +493,7 @@ void read_cov(char * filename, bool normal) {
 
 	set<pos>::iterator it = bps.begin();
 	pos prev = *it; it++;
-
+	//cout << prev.str() << endl;
 	unsigned short chr, cov;
 	unsigned int coord;
 	//cerr << "started processing x2" << endl;
@@ -501,6 +503,9 @@ void read_cov(char * filename, bool normal) {
 		}
 		char* base = buffer+i*soe;
 		chr=*((unsigned short *)base);
+		if (chr==25 || chr==0) {
+			continue;
+		}
 		base+=sizeof(unsigned short);
 		coord=*((unsigned int *)base);
 		base+=sizeof(unsigned int);
@@ -514,6 +519,7 @@ void read_cov(char * filename, bool normal) {
 			prev=*it;
 			it++;
 		}
+		//cout << p.str() << endl;
 		if (it==bps.end()) {
 			//cout << "broke at " << p.first << " " << p.second << "    " << (*it).first << " " << (*it).second << endl;
 			break;	
@@ -621,7 +627,7 @@ int main(int argc, char ** argv) {
 			if (current.coord>MAX_EDGE_SIZE) {
 				to_add.insert(pos(current.chr,current.coord-MAX_EDGE_SIZE));
 			} else {
-				cerr << "TOO CLOSE!" << endl;
+				cerr << "TOO CLOSE!" << current.str() << endl;
 				exit(1);
 			}
 			last_chr=current.chr;	

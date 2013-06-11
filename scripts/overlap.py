@@ -4,6 +4,8 @@ import gzip
 import sys
 from bisect import bisect_left
 
+cov_cutoff=3.5
+
 if len(sys.argv)<4:
 	print "%s n master f1 f2 ..." % sys.argv[0]
 	sys.exit(1)
@@ -37,21 +39,24 @@ def line_to_pos(l):
 	line=l.lower().strip().split()
 	if line[2] in ('-','+') and line[5] in ('-','+'):
 		#ctx format
+		cov=int(line[6])
 		chr=chr_to_int(line[0])
 		spos=int(line[1])
 		epos=int(line[1])
-		k=(chr,spos,epos)
+		k=(chr,spos,epos,cov)
 		chr=chr_to_int(line[3])
 		spos=int(line[4])
 		epos=int(line[4])
-		kp=(chr,spos,epos)
+		kp=(chr,spos,epos,cov)
 		return (k,kp)
 	else:
 		chr=chr_to_int(line[0])
 		spos=int(line[1])
 		epos=int(line[2])
+		cov=1
+		print >> sys.stderr, "WARNING HARDCODED COV"
 		#chr,spos,epos=to_hg((chr,spos,epos))
-		return (chr,spos,epos)
+		return (chr,spos,epos,cov)
 
 doubles={}
 d=[]
@@ -68,13 +73,13 @@ for line in master_file:
 		if not kp in doubles:
 			doubles[kp]=set()
 		doubles[kp].add(k)
-		chr,spos,epos=k
-		d.append((chr,epos,spos))
-		chr,spos,epos=kp
-		d.append((chr,epos,spos))
+		chr,spos,epos,cov=k
+		d.append((chr,epos,spos,cov))
+		chr,spos,epos,cov=kp
+		d.append((chr,epos,spos,cov))
 	else:
-		chr,spos,epos=z
-		d.append((chr,epos,spos))
+		chr,spos,epos,cov=z
+		d.append((chr,epos,spos,cov))
 
 sorted=True
 for i in xrange(len(d)-1):
@@ -83,8 +88,8 @@ for i in xrange(len(d)-1):
 		break
 
 def overlap(mi,i):
-	mchr,mepos,mspos=mi
-	chr,spos,epos=i
+	mchr,mepos,mspos,mcov=mi
+	chr,spos,epos,cov=i
 	if chr!=mchr:
 		return 0
 	d=min(epos,mepos)-max(spos,mspos)
@@ -115,7 +120,7 @@ for filename in input_filenames:
 		z=line_to_pos(linex)
 		if len(z)!=2:
 			k=z
-			chr,spos,epos=k
+			chr,spos,epos,cov=k
 			i=bisect_left(d,(chr,spos-n,epos))
 			dont_print=False
 			if i<0:
@@ -133,7 +138,7 @@ for filename in input_filenames:
 				print linex,
 		else:
 			k,kp=z
-			chr,spos,epos=k
+			chr,spos,epos,cov=k
 			i=bisect_left(d,(chr,spos-n,epos))
 			found=False
 			if i<0:
@@ -143,10 +148,11 @@ for filename in input_filenames:
 			while not found and i<len(d) and d[i][0]==chr and d[i][2]<n+epos: #start of m-int is at most n after end pos
 				if d[i][2]-n<spos<d[i][2]+n:
 					#need to check the other feet
-					for pchr,pspos,pepos in doubles[(d[i][0],d[i][2],d[i][1])]:
+					for pchr,pspos,pepos,pcov in doubles[(d[i][0],d[i][2],d[i][1],d[i][3])]:
 						if pchr==kp[0] and pspos-n<kp[1]<pspos+n:
-							found=True
-							break
+							if float(cov)/pcov < cov_cutoff:
+								found=True
+								break
 				i+=1
 			if not found:
 				print linex,

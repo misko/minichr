@@ -448,6 +448,7 @@ void read_edges(char * filename) {
 		int ichrb=-1;
 		int ret = sscanf(buffer,"%d\t%s\t%s\t%d\t%d\t%d",&cp,posa,posb,&length,&tumor,&normal);
 		int i=0;
+		//cerr << buffer << endl;
 		for (; posa[i]!=':'; i++) {
 			chra[i]=posa[i];
 		}
