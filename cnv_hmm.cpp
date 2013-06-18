@@ -647,17 +647,19 @@ int main(int argc, char ** argv) {
 		}
 		if (current.chr==next.chr && next.coord-current.coord>MAX_EDGE_SIZE) {
 			int d = next.coord-current.coord;
-			int k = d/MAX_EDGE_SIZE;
-			if (k*MAX_EDGE_SIZE!=d) {
+			int e = d/(d%MAX_EDGE_SIZE==0 ? d/MAX_EDGE_SIZE : (d/MAX_EDGE_SIZE+1)); // d / (num requried edges )
+			int k = e;
+			if (d%e!=0) {
+				d--;
 				k++;
 			}
 			pos i = pos(current.chr,current.coord+k);
 			while (next.coord>i.coord) {
 				//cout <<  "added poss " << i.str() << "\t c " << current.str() << "\t n" << next.str() <<  endl;
 				to_add.insert(i);
-				int d = next.coord-i.coord;
-				int k = d/MAX_EDGE_SIZE;
-				if (k*MAX_EDGE_SIZE!=d) {
+				k=e;
+				if (d%e!=0) {
+					d--;
 					k++;
 				}
 				i = pos(current.chr,i.coord+k);
