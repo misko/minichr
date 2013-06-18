@@ -20,7 +20,7 @@ header=True
 i=0
 for line_f in sys.stdin:
 	if header and line_f[0]=='@':
-		print line_f,
+		print >> h, line_f,
 		continue
 	if header:
 		header=False
@@ -45,13 +45,14 @@ for line_f in sys.stdin:
 				l[name]=(i,line_f)
 			else:
 				z,m_line_f=l[name]
-				print rname+m_line_f,
-				print rname+line_f,
+				print >> h, rname+m_line_f,
+				print >> h, rname+line_f,
 				l.pop(name)
 	else:
 		#proper pair
 		#check the cigar and mate cigar
-		indel=(line[5]!="100M")
+		#indel=(line[5]!="100M")
+		indel=(len(line[5].split('M'))!=2)
 		name=line[0]
 		if not name in l:
 			#dont have its pair yet, store in mem
@@ -60,9 +61,8 @@ for line_f in sys.stdin:
 			#have its pair
 			z,m_indel,m_line_f=l[name]
 			if m_indel or indel or isize>(mean+3*stddev):
-				print rname+m_line_f,
-				print rname+line_f,
-				pass
+				print >> h, rname+m_line_f,
+				print >> h, rname+line_f,
 			l.pop(name)	
 	i+=1
 	if i%10000==0:

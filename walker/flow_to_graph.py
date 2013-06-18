@@ -8,7 +8,7 @@ from copy import deepcopy
 #BAD ASSUMPTIONS
 
 
-keep_empty=False # set this to true to keep edges with no flow!
+keep_empty=True # set this to true to keep edges with no flow!
 
 node_to_pos={}
 genomic_edges={}
@@ -34,7 +34,7 @@ def to_chr(s):
 	return int(s)
 
 if len(sys.argv)!=5:
-	print "%s problem_file paths scale smooth" % sys.argv[0]
+	print "%s problem_file flow scale smooth" % sys.argv[0]
 	sys.exit(1)
 
 
@@ -169,7 +169,7 @@ def read_flow_file(filename):
 			l_genomic_edges[-1]=(l_genomic_edges[-1][0],t,0,u,expected[f,t])
 		else:
 			if len(l_genomic_edges)>0 and l_genomic_edges[-1][0][0]==f[0] and 0<f[1]-l_genomic_edges[-1][1][1]<smooth:
-				l_genomic_edges.append((l_genomic_edges[-1][1],f,0,0,expected[(l_genomic_edges[-1][1],f)]))
+				l_genomic_edges.append((l_genomic_edges[-1][1],f,0,0,-1))
 			l_genomic_edges.append((f,t,0,u,expected[(f,t)]))
 
 	if not keep_empty and len(l_genomic_edges)>1:

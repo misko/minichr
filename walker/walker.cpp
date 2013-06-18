@@ -21,6 +21,8 @@
 #define MAX_REUSE	2
 #define MIN_CP	1
 
+#define MIN_EDGE_SIZE	500
+
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
@@ -465,7 +467,7 @@ void read_edges(char * filename) {
 
 		
 
-		if (cp>2) {
+		if (cp>2 || (ichra==ichrb && coordb-coorda<MIN_EDGE_SIZE)) {
 			//insert the nodes
 			pos from = pos(ichra,coorda);
 			pos middle = pos(ichra,(coorda+coordb)/2);
