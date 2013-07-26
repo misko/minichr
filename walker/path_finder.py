@@ -8,7 +8,7 @@ from multiprocessing import Pool
 
 import time
 
-
+start_node=0
 params={'num_nodes':0,'k':0,'cost':0,'mins':0}
 edges={}
 
@@ -20,33 +20,17 @@ def print_graph(filename,flow_restriction={},extra=-1):
 	arc_lines=[]
 	for f in edges:
 		for t in edges[f]:
-			edges[f][t].sort()
-			flowr=len(edges[f][t])
-			if f!=1:
-				if f in flow_restriction and t in flow_restriction[f]:
-					if flow_restriction[f][t]<flowr:
-						s=sum(map(lambda x : x[0],edges[f][t][flow_restriction[f][t]:flowr]))
-						if f==1:
-							print s
-						#print >> sys.stderr, "Removing " , flowr-flow_restriction[f][t], " capacity from " , f , " to ", t , " - value " , s
-						sx+=s
-					flowr=min(flowr,flow_restriction[f][t])
-				for x in range(flowr):
-					score,low,cap = edges[f][t][x]
-					arc_lines.append( "a\t%d\t%d\t%d\t%d\t%d" % (f,t,low,cap,score))
-			else:
-				if len(edges[f][t])!=1:
-					print >> sys.stderr, "Failed to process"
-					sys.exit(1)
-				score,low,cap = edges[f][t][0]
-				if f in flow_restriction and t in flow_restriction[f]:
-					#print flow_restriction[f][t]
-					low=min(low,flow_restriction[f][t])
-					cap=min(cap,flow_restriction[f][t])
-				arc_lines.append( "a\t%d\t%d\t%d\t%d\t%d" % (f,t,low,cap,score))
-				
+			score,low,cap=edges[f][t]
+			used=0
+			if f in flow_restriction and t in flow_restriction[f]:
+				used=flow_restriction[f][t]
+			if used!=cap:
+				low=max(0,low-used)
+				arc_lines.append( "a\t%d\t%d\t%d\t%d\t%d" % (f,t,low,cap-used,score))
+				sx+=-1*(cap-used)
 	if extra>0:
-		arc_lines.append( "a\t%d\t%d\t%d\t%d\t%d" % (3,extra,1,1,0))
+		arc_lines.append( "a\t%d\t%d\t%d\t%d\t%d" % (start_node,extra,1,1,0))
+	arc_lines.append("a\t%d\t%d\t%d\t%d\t%d" % (1,1,0,0,0))
 	h = open(filename,'w')
 	print >> h, "p\tmin\t%d\t%d" % (params['num_nodes'],len(arc_lines))
 	for x in range(params['num_nodes']):
@@ -59,7 +43,8 @@ def print_graph(filename,flow_restriction={},extra=-1):
 def get_flow(problem_filename):
 	fld={}
 	cost=1337
-	stream = os.popen("cat " + problem_filename + " | cs2.exe")
+	#stream = os.popen("cat " + problem_filename + " | /data/misko/2013.04.12/cs2-4.3/cs2.exe")
+	stream = os.popen("cat " + problem_filename + " | /filer/misko/cs2.exe")
 	for line in stream:
 		if line.find('cost')>0:
 			cost = int(line.split()[4])
@@ -75,6 +60,7 @@ def get_flow(problem_filename):
 					fld[f][t]=0
 				fld[f][t]+=fl
 	stream.close()
+	#print >> sys.stderr, " SOLVED FLOW ", cost
 	return fld,cost
 
 def read_graph(x):
@@ -100,7 +86,10 @@ def read_graph(x):
 				edges[f]={}
 			if t not in edges[f]:
 				edges[f][t]=[]
-			edges[f][t].append((score,low,cap))
+			else:
+				"already read this edge"
+				sys.exit(1)
+			edges[f][t]=(score,low,cap)
 		elif line[0]=='p':
 			#handle program parameters
 			line=line.split()
@@ -111,11 +100,13 @@ def read_graph(x):
 def get_candidates(last_node,flow):
 	r=[]
 	#want to return edges leaving the last node that have positive flow
-	if last_node in flow:
-		for to_node in flow[last_node]:
-			if flow[last_node][to_node]>0:
-				r.append(to_node)
-	#print "Finding candidates for " , last_node,r
+	for node in edges[last_node]:
+		score,low,cap=edges[last_node][node]
+		used=0
+		if last_node in flow and node in flow[last_node]:
+			used=flow[last_node][node]
+		if used<cap:
+			r.append(node)
 	random.shuffle(r)
 	return r
 
@@ -127,13 +118,14 @@ def setup():
 	print_graph(fname)
 	flow,cost=get_flow(fname)
 	params['cost']=cost
-
+	
 	#remove unused edges
 	unused_cost=print_graph(fname,flow)
 	flow,cost=get_flow(fname)
 	if cost!=params['cost']:
 		cerr << "FATAL"
 		sys.exit(1)
+	sys.exit(1)
 	unused_cost=print_graph(fname,flow)
 	flow,cost=get_flow(fname)
 	if cost!=params['cost']:
@@ -145,10 +137,10 @@ def setup():
 	print "Original cost: ", params['cost']
 	return flow
 
-
+max_so_far=[-100000000000]
 
 def search(t):
-	l,fl,path=t
+	l,fl,path,cost=t
 	#fname='/dev/shm/out_t'+str(os.getpid())
 	fname='/dev/shm/out_%d' % pid
 	#ouc=print_graph(fname+"Y",fl,extra=path[-1])
@@ -157,10 +149,11 @@ def search(t):
 	results=[]
 	#keep going until we dont hit the sink!
 	last_node = path[-1]
-	if (last_node==5 or last_node==6) and params['walks']==(path.count(5)+path.count(6)):
+	#if (last_node==5 or last_node==6) and params['walks']==(path.count(5)+path.count(6)):
+	#local_fl,cost=get_flow(fname)
+	if last_node==start_node and cost==0:
 		unused_cost=print_graph(fname,fl,extra=last_node)
-		local_fl,cost=get_flow(fname)
-		#print >> sys.stderr, "DONE!",params['walks'],params['mins'],params['cost'],cost,unused_cost,len(path)
+		print >> sys.stderr, "DONE!",params['walks'],params['mins'],params['cost'],cost,unused_cost,len(path)
 		if cost==0:
 			print "Search ... " , path
 			params['mins']+=1
@@ -170,31 +163,27 @@ def search(t):
 	for candidate in candidates:
 		flr=deepcopy(fl)
 		#some quick sanity checks
-		if flr[last_node][candidate]<=0:
-			print >> sys.stderr, "ERasdfROR FDSFasfd" 
-			sys.exit(1)
-		flr[last_node][candidate]-=1
+		if last_node not in flr:
+			flr[last_node]={}
+		if candidate not in flr[last_node]:
+			flr[last_node][candidate]=0
+		flr[last_node][candidate]+=1
 		#lets find out if taking it out gives the same cost
 		unused_cost=print_graph(fname,flr,extra=candidate)
 		#print path,candidate
 		local_fl,cost=get_flow(fname)
-		if last_node==3 or (len(path)>2 and path[-2]==3) or (len(path)>3 and path[-3]==3):
-			d=unused_cost-params['unused_cost']
-			#print candidate,"cost:",cost,"cost+uc-param",cost+unused_cost-params['unused_cost'],"uc",unused_cost,params['cost']
-			#print flr[last_node][candidate]
-			#print path[-10:]
-		if cost<=0:
-			d=unused_cost-params['unused_cost']
-			#print cost,d,cost+d,params['cost']
-			if cost+d==params['cost']:
-				#if last_node==1:
-				#	print "passed!"
-				local_path=deepcopy(path)
-				local_path.append(candidate)
-				results.append((len(local_path),flr,local_path))
-			#if last_node==1:
-			#	print "decided!"
-			#	sys.exit(1)
+		#if last_node==3 or (len(path)>2 and path[-2]==3) or (len(path)>3 and path[-3]==3):
+		#	d=unused_cost-params['unused_cost']
+		#	#print candidate,"cost:",cost,"cost+uc-param",cost+unused_cost-params['unused_cost'],"uc",unused_cost,params['cost']
+		#	#print flr[last_node][candidate]
+		#	#print path[-10:]
+		if cost==unused_cost:
+			if unused_cost>max_so_far[0]+100 or unused_cost>-100:
+				print unused_cost#,path
+				max_so_far[0]=unused_cost
+			local_path=deepcopy(path)
+			local_path.append(candidate)
+			results.append((len(local_path),flr,local_path,cost))
 		else:
 			print >> sys.stderr, "ERROR !!!" , cost
 			sys.exit(1)
@@ -209,13 +198,21 @@ def search(t):
 	
 
 params['walks']=read_graph(sys.stdin)
+fname='/dev/shm/out_%d' % pid
+print print_graph(fname)
+flx,cx=get_flow(fname)
+flx_keys=flx.keys()
+random.shuffle(flx_keys)
+start_node=flx_keys[0]
 
-tflow=setup()
+#tflow=setup()
 
 #p = Pool(32)
 
 def look(start,end):
-	q=[(1,tflow,[3])]
+	print_graph(fname)
+	flx,cost=get_flow(fname)
+	q=[(1,{},[start_node],cost)]
 	while len(q)>0:
 		tpl=q.pop()
 		results,d = search(tpl)
@@ -228,15 +225,15 @@ def look(start,end):
 origin_time = time.time()
 max_time=60*60*60
 
-d=900
+d=60*60
 while True:
 	start = time.time()
 	look(start,start+d)
 	if time.time()<start+d:
 		#found a solution
-		print >> sys.stderr, "FOUND A SOLUTION"
+		print "FOUND A SOLUTION"
 	else:
 		#didnt find one
 		#d=int(d*1.2)
-		pass
+		print "NO SOLUTION FOUND"
 	print >> sys.stderr, "Restarting with ", d

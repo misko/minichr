@@ -371,6 +371,11 @@ void read_links(char * filename) {
 		pos posa=pos(nchra,bpa);
 		pos posb=pos(nchrb,bpb);
 
+		if (bpa<MAX_EDGE_SIZE || bpb<MAX_EDGE_SIZE) {
+			cerr << "SKIPPING LINK" << endl;
+			continue;
+		}
+
 		if (nchra>26 || nchrb>26) {
 			cerr << "ERROR READING IN LINKS" << endl;
 			exit(1);

@@ -469,32 +469,57 @@ void read_edges(char * filename) {
 
 		if (cp>2 || (ichra==ichrb && coordb-coorda<MIN_EDGE_SIZE)) {
 			//insert the nodes
-			pos from = pos(ichra,coorda);
-			pos middle = pos(ichra,(coorda+coordb)/2);
-			pos to = pos(ichrb,coordb);
+			if (ichra==ichrb && coordb-coorda>5) {
+				pos from = pos(ichra,coorda);
+				pos middle = pos(ichra,(coorda+coordb)/2);
+				pos to = pos(ichrb,coordb);
 
-			bps.insert(from);
-			bps.insert(middle);
-			bps.insert(to);
+				bps.insert(from);
+				bps.insert(middle);
+				bps.insert(to);
 
 
-			//add the edges
-			edge efm = edge(from,middle,true);
-			edge emt = edge(middle,to,true);
-	
-			edge_info ei;
-			ei.length=length/2;
-			ei.type=0;
-			ei.hmm_copy_number=cp;
+				//add the edges
+				edge efm = edge(from,middle,true);
+				edge emt = edge(middle,to,true);
+		
+				edge_info ei;
+				ei.length=length/2;
+				ei.type=0;
+				ei.hmm_copy_number=cp;
 
-			ei.normal=normal/2;
-			ei.tumor=tumor/2;
-			ei.poisson();
+				ei.normal=normal/2;
+				ei.tumor=tumor/2;
+				ei.poisson();
 
-			genomic_edges[efm]=ei;
-			genomic_edges[efm.reverse()]=ei;
-			genomic_edges[emt]=ei;
-			genomic_edges[emt.reverse()]=ei;
+				genomic_edges[efm]=ei;
+				genomic_edges[efm.reverse()]=ei;
+				genomic_edges[emt]=ei;
+				genomic_edges[emt.reverse()]=ei;
+			} else {
+				pos from = pos(ichra,coorda);
+				pos to = pos(ichrb,coordb);
+
+				bps.insert(from);
+				bps.insert(to);
+
+
+				//add the edges
+				edge e = edge(from,to,true);
+		
+				edge_info ei;
+				ei.length=length;
+				ei.type=0;
+				ei.hmm_copy_number=cp;
+
+				ei.normal=normal;
+				ei.tumor=tumor;
+				ei.poisson();
+
+				genomic_edges[e]=ei;
+				genomic_edges[e.reverse()]=ei;
+
+			}
 			
 		}
 		
@@ -533,6 +558,11 @@ void read_links(char * filename) {
 
 		ichra=to_chr(chra);
 		ichrb=to_chr(chrb);
+
+		if (ichra>24 || ichrb>24 || ichra==0 || ichrb==0) {
+			cerr << " skipping link, chrM or chr?? " << endl;
+			continue;
+		}
 
 		pos posa=pos(ichra,coorda);
 		if (bps.find(posa)==bps.end()) {
@@ -1311,11 +1341,18 @@ void flow_solve(int contigs) {
 }
 
 int main ( int argc, char ** argv) {
-	if (argc!=5) {
-		cerr << argv[0] << " links bp_coverages edges flow" << endl;
+	if (argc!=5 && argc!=6) {
+		cerr << argv[0] << " links bp_coverages edges flow [only large component?]" << endl;
 		exit(1);
 	}
-	
+
+	bool only_largest;	
+	if (argc==6) {
+		only_largest=true;
+	} else {
+		only_largest=false;
+	}	
+
 	char * links_filename = argv[1];
 	char * bp_coverages_filename = argv[2];
 	char * edges_filename = argv[3];
@@ -1370,11 +1407,14 @@ int main ( int argc, char ** argv) {
 	set<edge> to_remove;
 	for (map<edge, edge_info>::iterator mit = genomic_edges.begin(); mit!=genomic_edges.end(); mit++ ) {
 		edge e = mit->first;
-		/*if (connected_components[e.posa]!=max_id || connected_components[e.posb]!=max_id) {
-			to_remove.insert(e);
-		}*/
-		if (large_components.count(connected_components[e.posa])==0 || large_components.count(connected_components[e.posb])==0) {
-			to_remove.insert(e);
+		if (only_largest) {
+			if (connected_components[e.posa]!=max_id || connected_components[e.posb]!=max_id) {
+				to_remove.insert(e);
+			} 
+		} else {
+			if (large_components.count(connected_components[e.posa])==0 || large_components.count(connected_components[e.posb])==0) {
+				to_remove.insert(e);
+			}
 		}
 	}
 	for (set<edge>::iterator sit = to_remove.begin(); sit!=to_remove.end(); sit++ ){
@@ -1384,11 +1424,14 @@ int main ( int argc, char ** argv) {
 	//now drop the somatic
 	for (map<edge, edge_info>::iterator mit = somatic_edges.begin(); mit!=somatic_edges.end(); mit++ ) {
 		edge e = mit->first;
-		/*if (connected_components[e.posa]!=max_id || connected_components[e.posb]!=max_id) {
-			to_remove.insert(e);
-		}*/
-		if (large_components.count(connected_components[e.posa])==0 || large_components.count(connected_components[e.posb])==0) {
-			to_remove.insert(e);
+		if (only_largest) {
+			if (connected_components[e.posa]!=max_id || connected_components[e.posb]!=max_id) {
+				to_remove.insert(e);
+			}
+		} else {
+			if (large_components.count(connected_components[e.posa])==0 || large_components.count(connected_components[e.posb])==0) {
+				to_remove.insert(e);
+			}
 		}
 	}
 	for (set<edge>::iterator sit = to_remove.begin(); sit!=to_remove.end(); sit++ ){
@@ -1397,9 +1440,14 @@ int main ( int argc, char ** argv) {
 	//reconstruct bps
 	bps.clear();
 	for (map<pos,int>::iterator mit=connected_components.begin(); mit!=connected_components.end(); mit++ ){
-		//if (mit->second==max_id) {
-		if (large_components.count(mit->second)!=0) {
-			bps.insert(mit->first);
+		if (only_largest) {
+			if (mit->second==max_id) {
+				bps.insert(mit->first);
+			}
+		} else {
+			if (large_components.count(mit->second)!=0) {
+				bps.insert(mit->first);
+			}
 		}
 	}
 

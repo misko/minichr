@@ -1,20 +1,27 @@
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 using namespace std;
 
 unsigned short get_chr(const char * s) {
-	if (s[3]=='x' || s[3]=='X') {
-		return 23;
+	if (strlen(s)>3) {
+		s+=3;
 	}
-	if (s[3]=='y' || s[3]=='Y') {
-		return 24;
+	if (strlen(s)>0) {
+		if (s[0]=='x' || s[0]=='X') {
+			return 23;
+		}
+		if (s[0]=='y' || s[0]=='Y') {
+			return 24;
+		}
+		if (s[0]=='m' || s[0]=='M') {
+			return 25;
+		}
+		return atoi(s);
+	} else {
+		return 0;
 	}
-	if (s[3]=='m' || s[3]=='M') {
-		return 25;
-	}
-
-	return atoi(s+3);
 }
 
 int main (int argc, char ** argv) {

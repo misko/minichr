@@ -94,7 +94,7 @@ def annotate_path(p):
 			if f>t:
 				c=(t,f)
 			if c not in all_edges:
-				print >> sys.stderr, " Dropping edge " ,f,t
+				print >> sys.stderr, " Dropping edge " ,f, "(",p[x-1],")",t,"(",p[x],")"
 				sys.exit(1)
 			else:
 				if c not in used:
@@ -114,66 +114,86 @@ def canonical_loop(l):
 		return l
 	mn=min(l)
 	ix=l.index(mn)
-	return tuple(l[ix:]+l[:ix])
+	lr=tuple(l[ix:]+l[:ix])
+	if mn%2==0 or (len(lr)>2 and lr[-1]<lr[1]):
+		lr=map(lambda x : x-1 if x%2==0 else x+1, lr)
+		lr.reverse()
+		return canonical_loop(tuple(lr))
+	return lr
 
 def loops_in_path(p):
-	loops=set()
+	loops={}
 	p_so_far=[]
 	for x in p:
+		#not one of the real nodes...
 		if x<=6:
-			p_so_far=[]
+			p_so_far.clear()
+			#p_so_far=[]
 		try:
 			ix=p_so_far.index(x)
 			#found a copy
-			loop=p_so_far[ix:]
-			p_so_far=p_so_far[:ix]
+			loop=p_so_far[ix+1:]+[x]
+			p_so_far=p_so_far[:ix+1]
 			#rotate list to min start
-			loops.add(canonical_loop(loop))
+			cloop=canonical_loop(loop)
+			#cloop=tuple(loop)
+			#print cloop,p
+			if cloop not in loops:
+				loops[cloop]=0
+			loops[cloop]+=1
+			#loops.add(canonical_loop(loop))
 		except ValueError:
 			p_so_far.append(x)
 	return loops
 			
 
 def read_paths_file(filename):
-	all_loops=set()
+	alld={}
+	samples=0
 	h=open(filename,'r')
 	for line in h:
 		if line.find('Search ... ')==0:
 			try:
 				p=eval(line.replace('Search ... ',''))
 				p_loops=loops_in_path(p)
-				print len(all_loops)
-				x = p_loops.difference(all_loops)
-				all_loops=all_loops.union(p_loops)
+				#print "XX",len(p_loops)
+				samples+=1
+				for x in p_loops:
+					if x not in alld:
+						alld[x]=[]
+					alld[x].append(p_loops[x])
 				#print "\n".join(map(str,x))
-			except:
-				pass
+			except Exception, e:
+				print >> sys.stderr,  "XX:", e
 	h.close()
-	return
-	if len(p)!=0:
-		#break up the paths
-		loops=loops_in_path(p)
-		return loops
-		print "\n".join(map(str,sub_paths))
-		sys.exit(1)
-		#annotate each path
-		for sub_path in sub_paths:
-			print "# " + filename + " subpath_len" , len(sub_path)
-			used,path=annotate_path(sub_path)
-			l_genomic_edges=[]
-			for f,t in genomic_edges:
-				u=0
-				if (f,t) in used:
-					u=used[(f,t)]['genomic']*scale
-				l_genomic_edges.append((f,t,0,u))	
-			print l_genomic_edges
-			l_somatic_edges=[]
-			for f,t in somatic_edges:
-				u=0
-				if (f,t) in used:
-					u=used[(f,t)]['somatic']*scale
-				l_somatic_edges.append((f,t,somatic_edges[(f,t)][0][2],u))
-			print l_somatic_edges
+	#for loop in alld:
+	#	print loop
+	#sys.exit(1)
+	if len(alld)!=0:
+		for loop in alld:
+			if sum(alld[loop])>3:
+				used,path=annotate_path(loop)
+				l_genomic_edges=[]
+				cq=0
+				length=0
+				for f,t in genomic_edges:
+					u=0
+					if (f,t) in used:
+						cq+=f[1]
+						cq+=t[1]
+						u=used[(f,t)]['genomic']*scale*(sum(alld[loop])/len(alld[loop]))#*alld[loop]/float(samples)
+						l_genomic_edges.append((f,t,0,u))
+						length+=abs(f[1]-t[1])
+				l_somatic_edges=[]
+				for f,t in somatic_edges:
+					u=0
+					if (f,t) in used:
+						u=used[(f,t)]['somatic']*scale*(sum(alld[loop])/len(alld[loop]))
+						l_somatic_edges.append((f,t,somatic_edges[(f,t)][0][2],u))
+				print "# " + filename + " subpath_len" , len(loop) ,  alld[loop] , "/", samples, len(alld)
+				print "#Samples: %d GlobalFreq: %0.2f Expected: %0.2f Expected if present: %0.2f L: %d" % ( samples , float(len(alld[loop]))/float(samples) , float(sum(alld[loop]))/samples , float(sum(alld[loop]))/len(alld[loop]), length), loop
+				#print str(map(lambda x : "(%s, %s, %d, %0.2f)" % (str(x[0]),str(x[1]),x[2],x[3]) , l_genomic_edges)).replace('\'','')
+				#print str(map(lambda x : "(%s, %s, %d, %0.2f)" % (str(x[0]),str(x[1]),x[2],x[3]) , l_somatic_edges)).replace('\'','')
 	return None
 
 problem_filename=sys.argv[1]

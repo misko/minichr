@@ -110,29 +110,6 @@ def annotate_path(p):
 	return used,path
 
 
-def canonical_loop(l):
-	if len(l)==0:
-		return l
-	mn=min(l)
-	ix=l.index(mn)
-	return tuple(l[ix:]+l[:ix])
-
-def loops_in_path(p):
-	loops=set()
-	p_so_far=[]
-	for x in p:
-		if x<=6:
-			p_so_far=[]
-		try:
-			ix=p_so_far.index(x)
-			#found a copy
-			loop=p_so_far[ix:]
-			p_so_far=p_so_far[:ix]
-			#rotate list to min start
-			loops.add(canonical_loop(loop))
-		except ValueError:
-			p_so_far.append(x)
-	return loops
 
 		
 def pr(pf,pt,pl,paths):

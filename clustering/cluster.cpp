@@ -22,13 +22,14 @@ using namespace std;
 #define REVERSE		0x10
 #define M_REVERSE	0x20
 
-#define WEIRD_STDDEV	4
+// changed on jul 15 2013 //#define WEIRD_STDDEV	4
+#define WEIRD_STDDEV	6
 #define MAX_STDDEV	23
 
 #define MIN_SHARP	10
 #define SHARP_BP	15
 
-#define THREADS	6
+#define THREADS	1
 
 #define READ_SIZE	100000
 
@@ -46,6 +47,7 @@ class pos {
 		bool operator>(const pos &other) const;
 		bool operator==(const pos &other) const;
 		bool operator!=(const pos &other) const;
+		unsigned int operator-(const pos &other) const;
 };
 
 class cluster {
@@ -162,6 +164,17 @@ bool pos::operator!=(const pos &other) const {
 	}
 	return true;
 
+}
+
+
+unsigned int pos::operator-(const pos &other) const {
+	if (chr!=other.chr) {
+		return -1;
+	}
+	if (coord>other.coord) {
+		return coord-other.coord;
+	}
+	return other.coord-coord;
 }
 
 pos set_median(multiset<pos> s) {
@@ -330,6 +343,7 @@ void update_cluster(pos a, pos b) {
 	}
 	
 	//make a new entry
+	//cout << "\tmaking new entry " << endl;
 	cluster c = cluster(a.strand,b.strand);
 	if (a.marked) {
 		c.lefts.insert(a);
@@ -436,9 +450,12 @@ pos process_read(vector<string> & v_row) {
 
 
 				bool is_normal_pair=true;
-				if (mate_strand==my_strand) {
+				//gets false positives
+				//	 TCGA-06-2557_temp2]$ samtools view -h tumor.bam 7:54479546-54480346 | grep -v '##############################' | /filer/misko/mini_chr/git/minichr/clustering/cluster_o 300 60
+				/*if (mate_strand==my_strand) {
 					is_normal_pair=false;
-				} else if (!min_pos.strand && isize>110) {
+				} else */ 
+				if (!min_pos.strand && isize>110 && my-mate>25) {
 					//TODO assume read size is 100
 					is_normal_pair=false;
 				} else if (isize>=(WEIRD_STDDEV*stddev+mean)) {
@@ -473,7 +490,7 @@ pos process_read(vector<string> & v_row) {
 					}					
 				}
 
-				//cerr << my_chr << ":" << my_pos << (my_strand ? "+" : "-") << " " << mate_chr << ":" << mate_pos << (mate_strand ? "+" : "-")  << endl;
+				//cerr << qname << "\t" << my_chr << ":" << my_pos << (my_strand ? "+" : "-") << " " << mate_chr << ":" << mate_pos << (mate_strand ? "+" : "-")  << endl;
 
 				//pos mate = pos(mate_chr,mate_pos,mate_strand);
 

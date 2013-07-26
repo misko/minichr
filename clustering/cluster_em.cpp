@@ -920,7 +920,7 @@ void process_mapped_read(vector<string> v_row) {
 			my.coord+=c_len;
 		}
 
-		//cerr << my_chr << ":" << my_pos << " " << mate_chr << ":" << mate_pos << endl;
+		//cerr << isize << " " << my_chr << ":" << my_pos << " " << mate_chr << ":" << mate_pos << endl;
 		
 				
 		int cid = find_cluster(my,mate);
@@ -1168,7 +1168,13 @@ int main( int argc, char ** argv) {
 	
 		ss >> s_chra >> coorda >> stranda >> s_chrb >> coordb >> strandb  >> support;  
 
-
+		chra=to_chr(s_chra.c_str());
+		chrb=to_chr(s_chrb.c_str());	
+	
+		if (chra>24 || chrb>24 || chra==0 || chrb==0) {
+			cerr << " Skipping link , chrM or chr??" << endl;
+			continue;
+		}
 
 		pos b1 = pos(to_chr(s_chra.c_str()),coorda,stranda=="+");
 		pos b2 = pos(to_chr(s_chrb.c_str()),coordb,strandb=="+");
@@ -1263,8 +1269,10 @@ int main( int argc, char ** argv) {
 				max_pos = v[1].inside;
 				min_pos = v[0].inside;
 			}	
+			cerr << max_pos.str() << "\t" << min_pos.str() << (normal_pair(min_pos,max_pos) ? "NORMAL" : "NOT NORMAL") << endl;
+			bool normal=normal_pair(min_pos,max_pos);
 			
-			if (normal_pair(min_pos,max_pos)) {
+			if (normal) {
 				if ( !v[0].inside.sharp && !v[1].inside.sharp) {
 					//drop it, it's too normal
 					c_normals[v[0].cid].push_back(max_pos-min_pos);	
@@ -1305,6 +1313,7 @@ int main( int argc, char ** argv) {
 					}
 
 				}
+
 			}
 
 			if (v[0].cid==-1 && v[1].cid==-1) {
@@ -1364,18 +1373,20 @@ int main( int argc, char ** argv) {
 			}
 
 
-			if (min_pos_bp!=max_pos_bp) {
+			if (!normal && min_pos_bp!=max_pos_bp) {
 				//span the break points!!!
 				if (min_pos_bp==1) {
 					c.b1pairs.insert(min_pos);
 					c.b2pairs.insert(max_pos);
 					c.pairs.push_back(pair<pos,pos>(min_pos,max_pos));
 					//cerr << " 1 " << min_pos.str() << " " << max_pos.str() << endl;
+					//cerr << "\t" <<  v[0].name << "\t" << v[1].name << "\t" << max_pos.str() << "\t" << min_pos.str() << (normal_pair(min_pos,max_pos) ? "NORMAL" : "NOT NORMAL") << endl;
 				} else {
 					c.b2pairs.insert(min_pos);
 					c.b1pairs.insert(max_pos);
 					c.pairs.push_back(pair<pos,pos>(max_pos,min_pos));
 					//cerr << " 2 " << min_pos.str() << " " << max_pos.str() << endl;
+					//cerr << "\t" <<  v[0].name << "\t" << v[1].name << "\t" << max_pos.str() << "\t" << min_pos.str() << (normal_pair(min_pos,max_pos) ? "NORMAL" : "NOT NORMAL") << endl;
 				}
 			} else {
 				//dont span, only on one side
