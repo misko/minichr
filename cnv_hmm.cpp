@@ -23,7 +23,7 @@
 #define MAX_FLOW 60
 #endif
 #define MAX_FREE 40
-
+#define STATES 120
 
 
 #define ZERO 1e-6
@@ -737,15 +737,15 @@ int main(int argc, char ** argv) {
 
 	cerr << "Starting HMM..." << endl;
 
-	double * states = (double*)malloc(sizeof(double)*5*(bps.size()+2));
+	double * states = (double*)malloc(sizeof(double)*STATES*(bps.size()+2));
 	if (states==NULL) {
 		cerr << "AMLLOC ERROC " << endl;
 		exit(1);
 	}
 
 	
-	for (int i=0; i<5; i++) {
-		states[i]=0.2;
+	for (int i=0; i<STATES; i++) {
+		states[i]=1.0/STATES;
 	}
 	
 
@@ -774,8 +774,8 @@ int main(int argc, char ** argv) {
 
 
 	
-			double emission[5];
-			for (int i=0; i<5; i++) {
+			double emission[STATES];
+			for (int i=0; i<STATES; i++) {
 				if (normal_coverage>=30) {
 					if (i==0) {
 						emission[i]=-(((double)normal_coverage)*0.1)+cancer_coverage*log((((double)normal_coverage)*0.1));
@@ -800,27 +800,29 @@ int main(int argc, char ** argv) {
 					can_drop=true;
 				}
 			}
-			double transistion[25];
-			for (int i=0; i<5; i++) {
+			double transistion[STATES*STATES];
+			for (int i=0; i<STATES; i++) {
 				double p=0;
 				if (!can_rise && !can_drop) {
-					for (int j=0; j<5; j++) {
+					double x = 0.999;
+					for (int j=0; j<STATES; j++) {
 						if (i==j) {
-							p=log(0.999);
+							p=log(x);
 						} else {
-							p=log((1-0.999)/4);
+							p=log((1-x)/(STATES-1));
 						}
-						transistion[5*i+j]=p;
+						transistion[STATES*i+j]=p;
 					}
 				}
 				if (can_rise || can_drop) {
-					for (int j=0; j<5; j++) {
+					double x = 0.6;
+					for (int j=0; j<STATES; j++) {
 						if (i==j) {
-							p=log(0.6);
+							p=log(x);
 						} else {
-							p=log(0.1);
+							p=log((1-x)/(STATES-1));
 						}
-						transistion[5*i+j]=p;
+						transistion[STATES*i+j]=p;
 					}
 				}
 				/*if (can_rise && !can_drop) {
@@ -849,16 +851,16 @@ int main(int argc, char ** argv) {
 
 			map<int,int> back_t;
 
-			for (int i=0; i<5; i++) {
-				states[s*5+i]=transistion[5*i]+states[(s-1)*5+i]+emission[0];
+			for (int i=0; i<STATES; i++) {
+				states[s*STATES+i]=transistion[STATES*i]+states[(s-1)*STATES+i]+emission[0];
 				back_t[i]=0;
 			}
 
-			for (int i=0; i<5; i++) {
-				for (int j=0; j<5; j++) {
-					double  z = transistion[5*j+i]+states[(s-1)*5+j]+emission[i];
-					if (z>states[s*5+i]) {
-						states[s*5+i]=z;
+			for (int i=0; i<STATES; i++) {
+				for (int j=0; j<STATES; j++) {
+					double  z = transistion[STATES*j+i]+states[(s-1)*STATES+j]+emission[i];
+					if (z>states[s*STATES+i]) {
+						states[s*STATES+i]=z;
 						back_t[i]=j;
 					}
 				}	
@@ -899,8 +901,8 @@ int main(int argc, char ** argv) {
 			map<int, int> viterbi;
 			int max=0; 
 			s--;
-			for (int i=0; i<5; i++) {
-				if (states[s*5+i]>states[s*5+max]) {
+			for (int i=0; i<STATES; i++) {
+				if (states[s*STATES+i]>states[s*STATES+max]) {
 					max=i;
 				}
 			}
@@ -920,8 +922,8 @@ int main(int argc, char ** argv) {
 				max = back_t[max];
 				s--;
 			}
-			for (int i=0; i<5; i++) {
-				states[i]=0.2;
+			for (int i=0; i<STATES; i++) {
+				states[i]=1.0/STATES;
 			}
 			s=1;
 			state_to_edge.clear();
@@ -933,8 +935,8 @@ int main(int argc, char ** argv) {
 		map<int, int> viterbi;
 		int max=0; 
 		s--;
-		for (int i=0; i<5; i++) {
-			if (states[s*5+i]>states[s*5+max]) {
+		for (int i=0; i<STATES; i++) {
+			if (states[s*STATES+i]>states[s*STATES+max]) {
 				max=i;
 			}
 		}
@@ -954,8 +956,8 @@ int main(int argc, char ** argv) {
 			max = back_t[max];
 			s--;
 		}
-		for (int i=0; i<5; i++) {
-			states[i]=0.2;
+		for (int i=0; i<STATES; i++) {
+			states[i]=1.0/STATES;
 		}
 		s=1;
 		state_to_edge.clear();
