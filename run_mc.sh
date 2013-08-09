@@ -12,11 +12,12 @@ c=/data/misko/2013.04.12/cs2-4.3/cs2.exe
 #or hg18
 #ref=/filer/hg18/hg18.fa
 
-if [ $# -ne 4 ]; then 
-	echo $0 normal_bam tumor_bam work_directory ref
+if [ $# -ne 5 ]; then 
+	echo $0 normal_bam tumor_bam work_directory ref centro
 	exit
 fi
 
+cr=$5
 
 ref=$4
 if [ ! -f $ref ]; then
@@ -29,20 +30,20 @@ sleep 3
 normalbam=$1
 if [ ! -f $normalbam ]; then
 	echo Cannot find normal bam file!
-	exit
+	#exit
 fi
 if [ ! -f $normalbam.bai ]; then
 	echo Bam file not indexed!
-	exit
+	#exit
 fi
 tumorbam=$2
 if [ ! -f $tumorbam ]; then
 	echo Cannot find normal bam file!
-	exit
+	#exit
 fi
 if [ ! -f $tumorbam.bai ]; then
 	echo Bam file not indexed!
-	exit
+	#exit
 fi
 wd=$3
 if [ -d ${wd} ] ; then
@@ -51,34 +52,95 @@ if [ -d ${wd} ] ; then
 fi
 
 mkdir -p $wd
+echo $0 >> $wd/command_line
 
 #link in the files
-ln -s $normalbam $wd/normal.bam
-ln -s ${normalbam}.bai $wd/normal.bam.bai
-ln -s $tumorbam $wd/tumor.bam
-ln -s ${tumorbam}.bai $wd/tumor.bam.bai
+if [ ! -e $wd/normal.bam ] ; then 
+	rm $wd/normal.bam
+	if [ ! -e $normalbam ]; then
+		echo error with normal bam
+		exit 1
+	fi 
+	ln -s $normalbam $wd/normal.bam
+fi
+if [ ! -e $wd/normal.bam.bai ] ; then 
+	rm $wd/normal.bam.bai
+	if [ ! -e ${normalbam}.bai ]; then
+		echo error with normal bai
+		$s index $wd/normal.bam
+		if [ ! -e $wd/normal.bam.bai ] ; then 
+			echo failed to index exiting..
+			exit 1
+		fi		
+	else 
+		ln -s ${normalbam}.bai $wd/normal.bam.bai
+	fi
+fi
+if [ ! -e $wd/tumor.bam ] ; then 
+	rm $wd/tumor.bam 
+	if [ ! -e $tumorbam ]; then
+		echo error with tumor bam
+		exit 1
+	fi 
+	ln -s $tumorbam $wd/tumor.bam
+fi
+if [ ! -e $wd/tumor.bam.bai ] ; then 
+	rm $wd/tumor.bam.bai
+	if [ ! -e ${tumorbam}.bai ]; then
+		echo error with tumor bai
+		$s index $wd/tumor.bam
+		if [ ! -e $wd/tumor.bam.bai ] ; then 
+			echo failed to index exiting..
+			exit 1
+		fi		
+	else 
+		ln -s ${tumorbam}.bai $wd/tumor.bam.bai
+	fi
+fi
 
 tys="normal tumor"
-cluster=$g/clustering/cluster
+cluster=$g/clustering/cluster_x
 cov_mapq=20
 cluster_mapq=10
 
 function covNcluster {
-	ty=$1
+	local ty=$1
 	#BAM file coverage
-	echo Skipping cov file generation
-	#$s mpileup -q ${cov_mapq} $wd/${ty}.bam | $g/getcov/get_cov ${wd}/${ty}_cov
-	echo "Warning sampling first 100000 for insert size"
-	#$j -jar $p/CollectInsertSizeMetrics.jar I=$wd/${ty}.bam H=$wd/${ty}_histo O=$wd/${ty}_stats VALIDATION_STRINGENCY=LENIENT
-	cat $wd/${ty}_stats | grep -A 1 MED | grep -v "\-\-" | grep -v MEDIAN | awk '{m+=$5; s+=$6} END {print m/NR,s/NR}' > $wd/${ty}_mean_and_std.txt
-	mean=`cat ${wd}/${ty}_mean_and_std.txt | awk '{print int($1)}'`
-	stddev=`cat ${wd}/${ty}_mean_and_std.txt | awk '{print int($2)}'`
+	if [ ! -e ${wd}/${ty}_cov ]; then
+		rm ${wd}/${ty}_cov
+		echo Generating coverage file
+		$s mpileup -q ${cov_mapq} $wd/${ty}.bam | $g/getcov/get_cov ${wd}/${ty}_cov
+	else
+		echo Skipping cov file generation
+	fi
+
+	if [ ! -e $wd/${ty}_stats ] ; then
+		rm ${wd}/${ty}_stats
+		echo Generating stats for bam
+		$j -jar $p/CollectInsertSizeMetrics.jar I=$wd/${ty}.bam H=$wd/${ty}_histo O=$wd/${ty}_stats VALIDATION_STRINGENCY=LENIENT
+	else
+		echo Skipping stats generation
+	fi
 	
-	echo Skipping chrM 
-	$s view -q ${cluster_mapq} ${wd}/${ty}.bam | grep -v chrM  | python $g/filter_bwa_mq.py ${cluster_mapq} | $cluster $mean $stddev | gzip > ${wd}/${ty}_clusters.txt.gz
+	cat $wd/${ty}_stats | grep -A 1 MED | grep -v "\-\-" | grep -v MEDIAN | awk '{m+=$5; s+=$6} END {print m/NR,s/NR}' > $wd/${ty}_mean_and_std.txt
+	local mean=`cat ${wd}/${ty}_mean_and_std.txt | awk '{print int($1)}'`
+	local stddev=`cat ${wd}/${ty}_mean_and_std.txt | awk '{print int($2)}'`
+	
+
+	if [ ! -e ${wd}/${ty}_clusters.txt.gz ]; then
+		rm ${wd}/${ty}_clusters.txt.gz 
+		echo Generating base clusters
+		$s view -q ${cluster_mapq} ${wd}/${ty}.bam | grep -v chrM  | python $g/filter_bwa_mq.py ${cluster_mapq} | $cluster $mean $stddev | gzip > ${wd}/${ty}_clusters.txt.gz
+	else
+		echo Skipping base clusters generation
+	fi
+	#echo SKIPPING MATE MQ FILTER
+	#$s view -q ${cluster_mapq} ${wd}/${ty}.bam | grep -v chrM  | $cluster $mean $stddev | gzip > ${wd}/${ty}_clusters.txt.gz
 	covs="10 5 3 2 0"
 	for cov in $covs; do
-		zcat ${wd}/${ty}_clusters.txt.gz | awk -v c=$cov '{if ($4>c) {print $0}}' | sed 's/\([0-9]\)\t\([0-9]*\)[:]\([0-9]*\)\t\([0-9]*\)[:]\([0-9]*\)\t\([0-9]*\)\t\(.*\)/\2\t\3\t\4\t\5\t\1\t\6/g' | awk '{if ($1==23) {$1="X"}; if ($1==24) {$1="Y"}; if ($3==23) {$3="X"}; if ($3==24) {$3="Y"}; a="+"; b="+"; if ($5==1) {a="-"; b="-"}; if ($5==2) {a="+"; b="-"}; if ($5==3) {a="-"; b="+"}; print "chr"$1"\t"$2"\t"a"\tchr"$3"\t"$4"\t"b"\t"$6}' |  gzip > ${wd}/${ty}_cov${cov}.txt_f.gz
+		#zcat ${wd}/${ty}_clusters.txt.gz | awk -v c=$cov '{if ($4>c) {print $0}}' | sed 's/\([0-9]\)\t\([0-9]*\)[:]\([0-9]*\)\t\([0-9]*\)[:]\([0-9]*\)\t\([0-9]*\)\t\(.*\)/\2\t\3\t\4\t\5\t\1\t\6/g' | awk '{if ($1==23) {$1="X"}; if ($1==24) {$1="Y"}; if ($3==23) {$3="X"}; if ($3==24) {$3="Y"}; a="+"; b="+"; if ($5==1) {a="-"; b="-"}; if ($5==2) {a="+"; b="-"}; if ($5==3) {a="-"; b="+"}; print "chr"$1"\t"$2"\t"a"\tchr"$3"\t"$4"\t"b"\t"$6}' |  gzip > ${wd}/${ty}_cov${cov}.txt_f.gz
+		#move over the clusters, filter for same strand (type 0 or type 1) with size less then 2000
+		zcat ${wd}/${ty}_clusters.txt.gz | awk -v c=$cov '{if ($4>c) {print $0}}' | sed 's/\([0-9]\)\t\([0-9]*\)[:]\([0-9]*\)\t\([0-9]*\)[:]\([0-9]*\)\t\([0-9]*\)\t\(.*\)\t\([0-9][0-9]*[.]*[0-9]*\)\t\([0-9][0-9]*[.]*[0-9]*\)/\2\t\3\t\4\t\5\t\1\t\6\t\8\t\9/g' | awk '{if ($1==23) {$1="X"}; if ($1==24) {$1="Y"}; if ($3==23) {$3="X"}; if ($3==24) {$3="Y"}; a="+"; b="+"; if ($5==1) {a="-"; b="-"}; if ($5==2) {a="+"; b="-"}; if ($5==3) {a="-"; b="+"}; print "chr"$1"\t"$2"\t"a"\tchr"$3"\t"$4"\t"b"\t"$6"\t"$7"\t"$8}' | awk '{d=$2-$5; if (d<0) {d=-d}; if ($3==$6 && $1==$4 && d<2000) { } else {print $0}}' | gzip > ${wd}/${ty}_cov${cov}.txt_f.gz
 	done
 }
 
@@ -94,10 +156,17 @@ wait
 
 #echo not removing centromeres
 
-zcat ${wd}/tumor_cov5.txt_f.gz | awk '{if (NF>4) {print $0}}' | awk '{print $1"\t"$2"\t"$2+1"\t"$3"\t"$4"\t"$5"\t"$6"\t"$7}'  | $b/bin/intersectBed -a - -b $g/centromeres_merged | awk '{print $5"\t"$6"\t"$6+1"\t"$7"\t"$1"\t"$2"\t"$4"\t"$8}' | $b/bin/intersectBed -a - -b $g/centromeres_merged  | awk '{print $5"\t"$6"\t"$7"\t"$1"\t"$2"\t"$4"\t"$8}' | awk '{d=$2-$5; if (d<0) {d=-d}; if ($3==$6 && $1==$4 && d<2000) { } else {print $0}}' | gzip > ${wd}/both_centro_tumor_cov5.txt_f.gz
-zcat ${wd}/tumor_cov5.txt_f.gz | python $g/scripts/remove_lines.py ${wd}/both_centro_tumor_cov5.txt_f.gz | gzip > ${wd}/not_both_centro_tumor_cov5.txt_f.gz
+#take out clusters that have std of 200 or higher in breakpoints (typically centromeres?)
+zcat ${wd}/tumor_cov5.txt_f.gz | awk '{if ($8<200 && $9<200) {print $0}}' | gzip > ${wd}/tumor_cov5.txt_f_200std.gz 
 
-python $g/scripts/overlap.py 3000 ${wd}/normal_cov0.txt_f.gz ${wd}/not_both_centro_tumor_cov5.txt_f.gz  |  awk '{if (NF>4) {print $0}}' | awk '{d=$2-$5; if (d<0) {d=-d}; if ($3==$6 && $1==$4 && d<2000) { } else {print $0}}'  > $wd/nsubtract_centrosubtract_1000bp
+#split out the centromere clusters and other clusters, just for further analysis down the road
+zcat ${wd}/tumor_cov5.txt_f_200std.gz | awk '{if (NF>4) {print $0}}' | awk '{print $1"\t"$2"\t"$2+1"\t"$3"\t"$4"\t"$5"\t"$6"\t"$7"\t"$8"\t"$9}'  | $b/bin/intersectBed -a - -b $cr | awk '{print $5"\t"$6"\t"$6+1"\t"$7"\t"$1"\t"$2"\t"$4"\t"$8"\t"$9"\t"$10}' | $b/bin/intersectBed -a - -b $cr  | awk '{print $5"\t"$6"\t"$7"\t"$1"\t"$2"\t"$4"\t"$8"\t"$9"\t"$10}' | gzip > ${wd}/both_centro_tumor_cov5.txt_f.gz
+zcat ${wd}/tumor_cov5.txt_f_200std.gz | python $g/scripts/remove_lines.py ${wd}/both_centro_tumor_cov5.txt_f.gz |  gzip > ${wd}/not_both_centro_tumor_cov5.txt_f.gz
+#merge them back anyway
+zcat ${wd}/both_centro_tumor_cov5.txt_f.gz ${wd}/not_both_centro_tumor_cov5.txt_f.gz | gzip > ${wd}/all.txt_f.gz
+
+python $g/scripts/overlap.py 3000 ${wd}/normal_cov0.txt_f.gz ${wd}/all.txt_f.gz  |  awk '{if (NF>4) {print $0}}' | awk '{d=$2-$5; if (d<0) {d=-d}; if ($3==$6 && $1==$4 && d<2000) { } else {print $0}}'  > $wd/nsubtract_centrosubtract_1000bp
+#python $g/scripts/overlap.py 3000 ${wd}/normal_cov0.txt_f.gz ${wd}/not_both_centro_tumor_cov5.txt_f.gz  |  awk '{if (NF>4) {print $0}}' | awk '{d=$2-$5; if (d<0) {d=-d}; if ($3==$6 && $1==$4 && d<2000) { } else {print $0}}'  > $wd/nsubtract_centrosubtract_1000bp
 #python $g/scripts/overlap.py 50000 ${wd}/normal_cov0.txt_f.gz ${wd}/both_centro_tumor_cov5.txt_f.gz  |  awk '{if (NF>4) {print $0}}' | awk '{d=$2-$5; if (d<0) {d=-d}; if ($3==$6 && $1==$4 && d<2000) { } else {print $0}}'  >> $wd/nsubtract_centrosubtract_1000bp
 
 #get the local bam files
@@ -112,9 +181,9 @@ function localBam {
 		echo $ty $line 1>&2
 		$s view -H ${wd}/${ty}.bam | grep -i chr20 > /dev/null
 		if [ $? -eq 0 ] ; then
-	       		$s view ${wd}/${ty}.bam `echo $line | sed 's/\(chr\S*\)\s*\([0-9]*\)\s*\([0-9]*\)/\1:\2-\3/g'` 
+			$s view ${wd}/${ty}.bam `echo $line | sed 's/\(chr\S*\)\s*\([0-9]*\)\s*\([0-9]*\)/\1:\2-\3/g'` 
 		else
-	       		$s view ${wd}/${ty}.bam `echo $line | sed 's/chr\(\S*\)\s*\([0-9]*\)\s*\([0-9]*\)/\1:\2-\3/g'` 
+			$s view ${wd}/${ty}.bam `echo $line | sed 's/chr\(\S*\)\s*\([0-9]*\)\s*\([0-9]*\)/\1:\2-\3/g'` 
 		fi
 	done  | sort -S 5g | uniq | cat ${wd}/${ty}_sam_headers - | $s view -Sb -o ${wd}/${ty}_uniq.bam - 
 }
@@ -144,8 +213,9 @@ cat $wd/nsubtract_centrosubtract_1000bp_joined | grep chr  | awk '{print $1"\t"$
 $s view $wd/normal_uniq.bam | $g/arc_coverage/arc_coverage ${normal_mean} ${normal_std} $wd/nsubtract_centrosubtract_1000bp_joined_intervals > $wd/nsubtract_centrosubtract_1000bp_joined_arc_coveage
 
 cat $wd/nsubtract_centrosubtract_1000bp_joined | sed 's/\(chr[^:]*\):\([0-9]*\)\([+-]\)\s\(chr[^:]*\):\([0-9]*\)\([+-]\)/\1\t\2\t\3\t\4\t\5\t\6/g' | awk '{OFS="\t"; type=0; if ($3=="+") {if ($6=="+") {type=0} else {type=2} } else { if ($6=="+") {type=3} else {type=1} }; print $1,$2,$5,type,$7,0,0,0.0,0,$4,"EDGE" }' > $wd/nsubtract_centrosubtract_1000bp_joined_links
+
 echo running hmm
-$g/hmm $wd/nsubtract_centrosubtract_1000bp_joined_links ${wd}/tumor_cov ${wd}/normal_cov  > ${wd}/hmm_out
+$g/hmm_x $wd/nsubtract_centrosubtract_1000bp_joined_links ${wd}/tumor_cov ${wd}/normal_cov  > ${wd}/hmm_out
 
 echo running walker
 flows="0 1 2 4 8 16 32 64 128"
