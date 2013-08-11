@@ -14,7 +14,7 @@ for line in sys.stdin:
 	elif line.find("MQ:i:")>0:
 		mq=int(line.split("MQ:i:")[1].split()[0])
 		my_mq=int(line.split('\t')[4])
-		if mq>min_mq and my_mq>min_mq:
+		if mq>=min_mq and my_mq>=min_mq:
 			print line,
 	else:
 		print line,

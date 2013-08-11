@@ -21,6 +21,9 @@
 #define MAX_REUSE	2
 #define MIN_CP	1
 
+#define MIN_COPIES	4
+#define MULTIPLIER	1
+
 #define MIN_EDGE_SIZE	500
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
@@ -1217,11 +1220,14 @@ void flow_solve(int contigs) {
 			cerr << "Failed to find something ... " << endl;
 			exit(1);
 		}
-		for (int i=0; i<SZ; i++) {
+		for (int i=MIN_COPIES; (i+MIN_COPIES)<(SZ/MULTIPLIER); i++) {
 			int low=0;
 			int cap=1;
-			if (i>0) {
-				int cost=ei.scores[i]-ei.scores[i-1];
+			if (i>=MIN_COPIES && i>0) {
+				int j;
+				//int cost=ei.scores[i]-ei.scores[i-1];
+				int cost=ei.scores[i*MULTIPLIER+MIN_COPIES]-ei.scores[(i-1)*MULTIPLIER+MIN_COPIES];
+				
 				ss << "c Genomic\t" << e.posa.str() << "\t" << e.posb.str()  << "\t" << cost << endl;
 				ss << arc_strings(node_ids[e.posa],node_ids[e.posb],0,low,cap,cost);
 				arcs+=2;
@@ -1245,11 +1251,14 @@ void flow_solve(int contigs) {
 			cerr << "Failed to find something ... " << endl;
 			exit(1);
 		}
-		for (int i=0; i<SZ; i++) {
+		for (int i=MIN_COPIES; (i+MIN_COPIES)<(SZ/MULTIPLIER); i++) {
 			int low=0;
 			int cap=1;
-			if (i>0) {
-				int cost=ei.scores[i]-ei.scores[i-1];
+			if (i>=MIN_COPIES && i>0) {
+				int j;
+				//int cost=ei.scores[i]-ei.scores[i-1];
+				int cost=ei.scores[i*MULTIPLIER+MIN_COPIES]-ei.scores[(i-1)*MULTIPLIER+MIN_COPIES];
+
 				ss << "c Somatic\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << ei.type << "\t" << cost << endl;
 				ss << arc_strings(node_ids[e.posa],node_ids[e.posb],ei.type,low,cap,cost);
 				arcs+=2;

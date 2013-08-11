@@ -9,6 +9,7 @@
 #include <map>
 #include <set>
 #include <omp.h>
+#include <math.h>
 
 using namespace std;
 #define MIN(a,b) (((a)<(b))?(a):(b))
@@ -220,6 +221,23 @@ pos set_min(multiset<pos> s) {
 }
 
 
+double set_stddev(multiset<pos> s) {
+	double total=0;
+	multiset<pos>::iterator it = s.begin();
+	while (it!=s.end()) {
+		total+=it->coord;	
+		it++;
+	}
+	double average=total/s.size();	
+	double sum=0;
+	it=s.begin();	
+	while (it!=s.end()) {
+		sum+=(it->coord-average)*(it->coord-average);	
+		it++;
+	}
+	return sqrt(sum/s.size());
+}
+
 unsigned int cigar_len(const char * s, bool * sharp) {
 	unsigned int len=0;
 	unsigned int xlen=0;
@@ -304,9 +322,9 @@ void update_cluster(pos a, pos b) {
 	}
 
 
-	pos left_bound = pos(a.chr,MAX(stddev*MAX_STDDEV,a.coord)-stddev*MAX_STDDEV,true);
+	pos left_bound = pos(a.chr,MAX(stddev*MAX_STDDEV/2,a.coord)-stddev*MAX_STDDEV/2,true);
 	pos right_bound = pos(a.chr,a.coord+stddev*MAX_STDDEV,true);
-	pos xleft_bound = pos(b.chr,MAX(stddev*MAX_STDDEV,b.coord)-stddev*MAX_STDDEV,true);
+	pos xleft_bound = pos(b.chr,MAX(stddev*MAX_STDDEV/2,b.coord)-stddev*MAX_STDDEV/2,true);
 	pos xright_bound = pos(b.chr,b.coord+stddev*MAX_STDDEV,true);
 	map<pos , map<pos, cluster> >::iterator left_it = clusters.lower_bound(left_bound);
 	map<pos , map<pos, cluster> >::iterator right_it = clusters.upper_bound(right_bound);
@@ -452,10 +470,9 @@ pos process_read(vector<string> & v_row) {
 				bool is_normal_pair=true;
 				//gets false positives
 				//	 TCGA-06-2557_temp2]$ samtools view -h tumor.bam 7:54479546-54480346 | grep -v '##############################' | /filer/misko/mini_chr/git/minichr/clustering/cluster_o 300 60
-				/*if (mate_strand==my_strand) {
+				if (mate_strand==my_strand) {
 					is_normal_pair=false;
-				} else */ 
-				if (!min_pos.strand && isize>110 && my-mate>25) {
+				} else if (!min_pos.strand && isize>110 && my-mate>25) {
 					//TODO assume read size is 100
 					is_normal_pair=false;
 				} else if (isize>=(WEIRD_STDDEV*stddev+mean)) {
@@ -644,37 +661,37 @@ int main(int argc, char ** argv) {
 				if (c.left_strand) {
 					cout << "0\t" << left_bound.chr << ":" << left_bound.coord << "\t";
 					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << "\t";
-					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << endl;
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t" << set_stddev(c.lefts) << "\t" << set_stddev(c.rights) << endl;
 	
 					cout << "1\t" << right_bound.chr << ":" << right_bound.coord << "\t";
 					cout << left_bound.chr << ":" << left_bound.coord << "\t" << c.lefts.size() << "\t";
-					cout << (s_right ? "*" : "-" ) << "/" << (s_left ? "*" : "-" ) << endl;
+					cout << (s_right ? "*" : "-" ) << "/" << (s_left ? "*" : "-" ) << "\t" << set_stddev(c.lefts) << "\t" << set_stddev(c.rights) << endl;
 				} else {
 					cout << "1\t" << left_bound.chr << ":" << left_bound.coord << "\t";
 					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << "\t";
-					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << endl;
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t" << set_stddev(c.lefts) << "\t" << set_stddev(c.rights) << endl;
 	
 					cout << "0\t" << right_bound.chr << ":" << right_bound.coord << "\t";
 					cout << left_bound.chr << ":" << left_bound.coord  << "\t" << c.lefts.size() << "\t";
-					cout << (s_right ? "*" : "-" ) << "/" << (s_left ? "*" : "-" ) << endl;
+					cout << (s_right ? "*" : "-" ) << "/" << (s_left ? "*" : "-" ) << "\t" << set_stddev(c.lefts) << "\t" << set_stddev(c.rights) << endl;
 				}
 			} else {
 				if (c.left_strand) {
 					cout << "2\t" << left_bound.chr << ":" << left_bound.coord << "\t";
 					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << "\t";
-					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << endl;
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t" << set_stddev(c.lefts) << "\t" << set_stddev(c.rights)  << endl;
 	
 					cout << "2\t" << right_bound.chr << ":" << right_bound.coord << "\t";
 					cout << left_bound.chr << ":" << left_bound.coord << "\t" << c.lefts.size() << "\t";
-					cout << (s_right ? "*" : "-" ) << "/" << (s_left ? "*" : "-" ) << endl;
+					cout << (s_right ? "*" : "-" ) << "/" << (s_left ? "*" : "-" ) << "\t" << set_stddev(c.lefts) << "\t" << set_stddev(c.rights) << endl;
 				} else {
 					cout << "3\t" << left_bound.chr << ":" << left_bound.coord << "\t";
 					cout << right_bound.chr << ":" << right_bound.coord << "\t" << c.lefts.size() << "\t";
-					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << endl;
+					cout << (s_left ? "*" : "-" ) << "/" << (s_right ? "*" : "-" ) << "\t"  << set_stddev(c.lefts) << "\t" << set_stddev(c.rights) << endl;
 
 					cout << "3\t" << right_bound.chr << ":" << right_bound.coord << "\t";
 					cout << left_bound.chr << ":" << left_bound.coord << "\t" << c.lefts.size() << "\t";
-					cout << (s_right ? "*" : "-" ) << "/" << (s_left ? "*" : "-" ) << endl;
+					cout << (s_right ? "*" : "-" ) << "/" << (s_left ? "*" : "-" ) << "\t" << set_stddev(c.lefts) << "\t" << set_stddev(c.rights) << endl;
 				}
 
 			} 

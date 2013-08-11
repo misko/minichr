@@ -520,6 +520,13 @@ void read_cov(char * filename, bool normal) {
 
 		
 		pos p = pos(chr,coord);
+		if (p.chr!=it->chr) {
+			//cerr << "Switching chr from " << it->chr << " to " << p.chr << endl;
+			//cerr << "Restarting looking for pos " << chr << " : " << coord << ", was at " << it->chr << " : " << it->coord << endl;
+			//it=bps.lower_bound(p);
+			//it--;
+			it=bps.begin();
+		}
 		while (p>*it && it!=bps.end()) {
 			prev=*it;
 			it++;
@@ -783,6 +790,7 @@ int main(int argc, char ** argv) {
 						emission[i]=-((double)normal_coverage*i)+cancer_coverage*log((normal_coverage*i));
 					}
 				} else {
+					//TODO really should change this to just uniform...
 					emission[i]=0;
 				}
 			}
