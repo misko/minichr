@@ -21,9 +21,6 @@
 #define MAX_REUSE	2
 #define MIN_CP	1
 
-#define MIN_COPIES	4
-#define MULTIPLIER	1
-
 #define MIN_EDGE_SIZE	500
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
@@ -34,6 +31,9 @@
 
 using namespace std;
 
+
+int min_copies=0;
+int multiplier=1;
 
 
 class pos {
@@ -57,7 +57,7 @@ class edge {
 		edge(pos posa, pos posb,bool genomic);
 		edge reverse();
 		edge();
-		unsigned int length();
+		unsigned int length() const;
 		bool operator<(const edge &other) const;
 		bool operator>(const edge &other) const;
 		bool operator==(const edge &other) const;
@@ -230,7 +230,7 @@ edge edge::canonical() const {
 	}
 }
 
-unsigned int edge::length() {
+unsigned int edge::length() const {
 	if (posa.chr==posb.chr) {
 		if (posa.coord>posb.coord) {
 			return posa.coord-posb.coord;
@@ -1220,18 +1220,27 @@ void flow_solve(int contigs) {
 			cerr << "Failed to find something ... " << endl;
 			exit(1);
 		}
-		for (int i=MIN_COPIES; (i+MIN_COPIES)<(SZ/MULTIPLIER); i++) {
+		for (int i=0; (i*multiplier+min_copies)<SZ; ) {
 			int low=0;
-			int cap=1;
-			if (i>=MIN_COPIES && i>0) {
-				int j;
-				//int cost=ei.scores[i]-ei.scores[i-1];
-				int cost=ei.scores[i*MULTIPLIER+MIN_COPIES]-ei.scores[(i-1)*MULTIPLIER+MIN_COPIES];
-				
-				ss << "c Genomic\t" << e.posa.str() << "\t" << e.posb.str()  << "\t" << cost << endl;
-				ss << arc_strings(node_ids[e.posa],node_ids[e.posb],0,low,cap,cost);
-				arcs+=2;
+			int cap=0;
+
+			//int cost=ei.scores[i]-ei.scores[i-1];
+			int cost=0;
+			if (i>0) {
+				cost=ei.scores[i*multiplier+min_copies]-ei.scores[(i-1)*multiplier+min_copies];
+				//cerr << (i+min_copies) << " < " << (SZ/multiplier) << "\t" << cost << " vs " << ei.scores[i*multiplier+min_copies]-ei.scores[(i-1)*multiplier+min_copies] << endl;
+				while ((i*multiplier+min_copies)<SZ  && (cost==(int)(ei.scores[i*multiplier+min_copies]-ei.scores[(i-1)*multiplier+min_copies]))) {
+					i++;
+					cap++;
+				}			
+			} else {
+				i++;
 			}
+
+			ss << "c Genomic\t" << e.posa.str() << "\t" << e.posb.str()  << "\t" << cost << "\t" << cap << "\t" << e.length() << "\t" << ei.normal << "\t" << ei.tumor << endl;
+			ss << arc_strings(node_ids[e.posa],node_ids[e.posb],0,low,cap,cost);
+			arcs+=2;
+
 		}
 	}
 
@@ -1251,18 +1260,26 @@ void flow_solve(int contigs) {
 			cerr << "Failed to find something ... " << endl;
 			exit(1);
 		}
-		for (int i=MIN_COPIES; (i+MIN_COPIES)<(SZ/MULTIPLIER); i++) {
+		for (int i=0; (i*multiplier+min_copies)<SZ; ) {
 			int low=0;
-			int cap=1;
-			if (i>=MIN_COPIES && i>0) {
-				int j;
-				//int cost=ei.scores[i]-ei.scores[i-1];
-				int cost=ei.scores[i*MULTIPLIER+MIN_COPIES]-ei.scores[(i-1)*MULTIPLIER+MIN_COPIES];
+			int cap=0;
 
-				ss << "c Somatic\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << ei.type << "\t" << cost << endl;
-				ss << arc_strings(node_ids[e.posa],node_ids[e.posb],ei.type,low,cap,cost);
-				arcs+=2;
+			//int cost=ei.scores[i]-ei.scores[i-1];
+			int cost=0;
+			if (i>0) {
+				cost=ei.scores[i*multiplier+min_copies]-ei.scores[(i-1)*multiplier+min_copies];
+				//cerr << (i+min_copies) << " < " << (SZ/multiplier) << "\t" << cost << " vs " << ei.scores[i*multiplier+min_copies]-ei.scores[(i-1)*multiplier+min_copies] << endl;
+				while ((i*multiplier+min_copies)<SZ  && (cost==(int)(ei.scores[i*multiplier+min_copies]-ei.scores[(i-1)*multiplier+min_copies]))) {
+					i++;
+					cap++;
+				}			
+			} else {
+				i++;
 			}
+
+			ss << "c Somatic\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << ei.type << "\t" << cost << "\t" << cap << "\t" << ei.normal << "\t" << ei.tumor << endl;
+			ss << arc_strings(node_ids[e.posa],node_ids[e.posb],ei.type,low,cap,cost);
+			arcs+=2;
 		}
 	}
 	
@@ -1313,14 +1330,17 @@ void flow_solve(int contigs) {
 				if (f>0 && fromb>3 && tob>3) {
 					//if ( (tob==58 && fromb==47) || (tob==47 && fromb==58) ) {
 						//printf("%s", buffer);
-						if (f>1) {
-							cerr << "only expecting unit flow!" << endl;
-							exit(1);
-						}
+						//if (f>1) {
+						//	cerr << "only expecting unit flow!" << endl;
+						//	exit(1);
+						//}
 						pos posa = inv_node_ids[fromb];
 						pos posb = inv_node_ids[tob];
 						//cout << posa.str() << "\t" << from << "\t" << posb.str() << "\t" << to << endl;
-						add_flow_to_edge(posa,posb);
+						while (f>0) {
+							add_flow_to_edge(posa,posb);
+							f--;
+						}
 					//}
 				}
 				break;
@@ -1350,17 +1370,39 @@ void flow_solve(int contigs) {
 }
 
 int main ( int argc, char ** argv) {
-	if (argc!=5 && argc!=6) {
-		cerr << argv[0] << " links bp_coverages edges flow [only large component?]" << endl;
+	if (argc!=8) {
+		cerr << argv[0] << " links bp_coverages edges flow [only large component?Y/N [N]] min_copies[0] multiplier[1]" << endl;
 		exit(1);
 	}
 
-	bool only_largest;	
-	if (argc==6) {
+	
+	//output the command line
+	cout << "#CMD-LINE: " ;
+	for (int i=0; i<argc-1; i++) {
+		cout << argv[i] << " ";
+	}
+	cout << argv[argc-1] << endl;
+
+	bool only_largest=false;	
+	if (argv[5][0]=='Y' || argv[5][0]=='y') {
+		cout << "# only largest component" << endl;
 		only_largest=true;
 	} else {
+		cout << "# all components" << endl; 
 		only_largest=false;
-	}	
+	}
+
+	min_copies=atoi(argv[6]);
+	if (min_copies<0 || min_copies>1000) {
+		cout << "ERROR in min copies (range 0-1000) " << endl;
+		exit(1);
+	}
+
+	multiplier=atoi(argv[7]);
+	if (multiplier<1 || multiplier>1000) {
+		cout << "ERROR in multiplier (range 1-1000) " << endl;
+		exit(1);
+	}
 
 	char * links_filename = argv[1];
 	char * bp_coverages_filename = argv[2];
