@@ -4,17 +4,17 @@ import sys
 import gzip
 
 
-if len(sys.argv)!=2:
-	print "%s problemxfile.gz" % sys.argv[0]
+if len(sys.argv)!=3:
+	print "%s problemxfile.gz edge_lookup" % sys.argv[0]
 	sys.exit(1)
 
-pbxfname=sys.argv[1]
-
+pb_fname=sys.argv[1]
+el_fname=sys.argv[2]
 
 nodes={}
 ins={}
 outs={}
-edges={}
+edges=[]
 
 
 '''
@@ -28,11 +28,9 @@ Somatic edges types
 edge_lookup=[]
 
 def addxedge(fn,tn,ty,cost,cap):
-	b="px%dx%d" % (fn,tn)
-	if b not in edges:
-		edges[b]=[]
-	eid="%sx%d" % (b,len(edges[b]))
-	edges[b].append((cost,cap))
+	eid=len(edges)
+	edge_lookup.append((eid,fn,tn))
+	edges.append((cost,cap))
 	if ty==0:
 		outs[fn].append(eid)
 		ins[tn].append(eid)
@@ -87,13 +85,11 @@ def readxpb(fname):
 
 
 
-readxpb(pbxfname)
+readxpb(pb_fname)
 
 def outputxlpxsolve():
 	objxfunc=[]
-	for e in edges:
-		for x in range(len(edges[e])):
-			eid="%sx%d" % (e,x)
+	for x in range(len(edges[e])):
 			if edges[e][x][0]!=0:
 				objxfunc.append("%d %s" % (edges[x][0],eid))
 	print "min: "," + ".join(objxfunc),";"
@@ -120,11 +116,9 @@ def outputxlpxsolve():
 def outputxcplex():
 	#now output the lp file
 	objxfunc=[]
-	for e in edges:
-		for x in range(len(edges[e])):
-			eid="%sx%d" % (e,x)
-			if edges[e][x][0]!=0:
-				objxfunc.append("%d %s" % (edges[e][x][0],eid))
+	for x in range(len(edges)):
+		if edges[x][0]!=0:
+			objxfunc.append("%d f%d" % (edges[x][0],x))
 	print "Minimize\n obj:",
 	ll=5
 	for x in objxfunc:
@@ -140,26 +134,26 @@ def outputxcplex():
 	print "Subject To"
 	for n in nodes:
 		c=[]
-		for eid in ins[nodes[n]]:
-			c.append(" + %s" % (eid))
-		for eid in outs[nodes[n]]:
-			c.append(" - %s" % (eid)) 
+		for x in ins[nodes[n]]:
+			c.append(" + f%d" % (x))
+		for x in outs[nodes[n]]:
+			c.append(" - f%d" % (x)) 
 		if len(c)!=0:
 			print " n%d: " % nodes[n],"".join(c)," = 0"
 			#print "".join(c),"= 0",";"
 
 	print "Bounds"
-	for e in edges:
-		for x in range(len(edges[e])):
-			eid="%sx%d" % (e,x)
-			print " %s <= %d" % (eid,edges[e][x][1])
+	for x in range(len(edges)):
+		print " f%d <= %d" % (x,edges[x][1])
 	print "Integers "
 	o=[]
-	for e in edges:
-		for x in range(len(edges[e])):
-			eid="%sx%d" % (e,x)
-			o.append(eid)
+	for x in range(len(edges)):
+		o.append("f%d" % x)
 	print " ".join(o)
 	print "End"
 
 outputxcplex()
+
+h=open(el_fname,'w')
+h.write("\n".join(map(lambda x : str(x) , edge_lookup)))
+h.close()
