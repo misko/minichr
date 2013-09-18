@@ -13,14 +13,16 @@ edge_lookup=[]
 
 h=gzip.open(el_fname)
 for line in h:
-	line=line[1:-2].split(',')
+	line=line.strip()
+	line=line[1:-1].split(',')
 	e=int(line[0])
 	f=int(line[1])
 	t=int(line[2])
+	ty=int(line[3])
 	if len(edge_lookup)!=e:
 		print >> sys.stderr, " Failed!"
 		sys.exit(1)
-	edge_lookup.append((f,t))
+	edge_lookup.append((f,t,ty))
 h.close()
 
 
@@ -32,7 +34,16 @@ for line in h:
 		line=line[1:-1].split()
 		fl=int(line[1])
 		e=int(line[0])
-		fn,tn=edge_lookup[e]
+		fn,tn,ty=edge_lookup[e]
+		if ty==0:
+			pass
+		elif ty==1:
+			fn-=1
+			tn-=1
+		elif ty==2:
+			tn-=1
+		elif ty==3:
+			fn-=1
 		if fn not in flows:
 			flows[fn]={}
 		if tn not in flows[fn]:
