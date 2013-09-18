@@ -1,7 +1,7 @@
 #/usr/bin/python
 
 import sys
-
+import gzip
 
 #need to read in problem file for lower bounds on flow
 #need to read in solution to simplify
@@ -9,11 +9,11 @@ import sys
 
 edges_low={}
 
-if len(sys.argv)!=2:
-	print "%s problem_file"
+if len(sys.argv)!=3:
+	print "%s problem_file.gz solved.gz" % (sys.argv[0])
 	sys.exit(1)
 
-h=open(sys.argv[1])
+h=gzip.open(sys.argv[1])
 for line in h:
 	if line[0]=='a':
 		f,t,low,cap,score=map(int,line.split()[1:])
@@ -29,7 +29,8 @@ edges={}
 o=[]
 o.append("c graph is simplified...")
 
-for line in sys.stdin:
+h=gzip.open(sys.argv[2])
+for line in h:
 	if line[0]=='f':
 		# a flow
 		f,t,fl=map(int,line.split()[1:])

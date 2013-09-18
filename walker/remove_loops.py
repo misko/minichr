@@ -5,12 +5,19 @@ import sys
 from copy import deepcopy
 import random
 #from multiprocessing import Pool
+
+
 from subprocess import Popen, PIPE, STDOUT
 
+
+import gzip
 import time
 
 params={'num_nodes':0,'k':0,'cost':0,'mins':0}
 edges={}
+
+full_params={'num_nodes':0,'k':0,'cost':0,'mins':0}
+full_edges={}
 
 pid=os.getpid()
 
@@ -64,7 +71,7 @@ def get_flow(s):
 	#print >> sys.stderr, " SOLVED FLOW ", cost
 	return fld,cost
 
-def read_graph(x):
+def read_graph(x,l_edges,l_params,full=False):
 	#expect graph
 	walks=0
 	for line in x:
@@ -83,29 +90,58 @@ def read_graph(x):
 			walks=max(walks,low)
 			cap=int(line[4])
 			score=int(line[5])
-			if f not in edges:
-				edges[f]={}
-			if t not in edges[f]:
-				edges[f][t]=[]
-			else:
-				"already read this edge"
+			if f not in l_edges:
+				l_edges[f]={}
+			if t not in l_edges[f]:
+				l_edges[f][t]=[]
+			elif not full:
+				print "already read this edge"
 				sys.exit(1)
-			edges[f][t]=(score,low,cap)
+			if full:
+				l_edges[f][t].append((score,low,cap))
+			else:
+				l_edges[f][t]=(score,low,cap)
 		elif line[0]=='p':
 			#handle program parameters
 			line=line.split()
-			params['num_nodes']=int(line[2])
-			params['num_arcs']=int(line[3])
-	return walks
+			l_params['num_nodes']=int(line[2])
+			l_params['num_arcs']=int(line[3])
+	l_params['walks']=walks
+	return l_edges,l_params
 
 
 
 
+if len(sys.argv)!=3:
+	print "%s full_pb.gz simple_pb.gz" % sys.argv[0]
+	sys.exit(1)
 
+fpb_fname=sys.argv[1]
+spb_fname=sys.argv[2]
 
-params['walks']=read_graph(sys.stdin)
+print "Reading in simple graph...",
+read_graph(gzip.open(spb_fname),edges,params)
 print params
+print "Reading in full graph...",
+read_graph(gzip.open(fpb_fname),full_edges,full_params,True)
+print full_params
 
+
+#reduce the scores that we dont need
+keep={}
+for f in full_edges:
+	keep[f]={}
+	for t in full_edges[f]:
+		full_edges[f][t].sort()
+		keep[f][t]=0
+		if f in edges and t in edges[f]:
+			keep[f][t]=edges[f][t][2]
+
+for f in keep:
+	for t in keep[f]:
+		full_edges[f][t]=full_edges[f][t][:keep[f][t]]
+		
+				
 
 def cloop(l):
 	return tuple(l[l.index(min(l)):]+l[:l.index(min(l))])
@@ -124,22 +160,26 @@ def dfs(flr,found):
 		q=[([],v)]
 		while len(q)>0:
 			parents,node=q.pop()
-			for t in edges[node]:
-				used=0
-				if node in flr and t in flr[node]:
-					used=flr[node][t]
-				if edges[node][t][2]>used:
-					if t in parents:
-						#cycle?
-						p=cloop(parents[parents.index(t):]+[node])
-						if p not in found:
-							return p
-						else:
-							#ignore edge
-							pass
-					elif t not in seen:
-						seen.add(t)
-						q.append((parents+[node],t))
+			try:
+				for t in edges[node]:
+					used=0
+					if node in flr and t in flr[node]:
+						used=flr[node][t]
+					if edges[node][t][2]>used:
+						if t in parents:
+							#cycle?
+							p=cloop(parents[parents.index(t):]+[node])
+							if p not in found:
+								return p
+							else:
+								#ignore edge
+								pass
+						elif t not in seen:
+							seen.add(t)
+							q.append((parents+[node],t))
+			except:
+				print parents,node
+				sys.exit(1)
 	return None
 
 
@@ -198,10 +238,24 @@ while k!=None:
 		found[tk]=m
 	k=dfs(flr,found)
 
+def score(k,m):
+	score=0
+	for x in range(len(k)):
+		f=k[x]
+		t=k[(x+1)%len(k)]
+		score+=sum(map( lambda z : z[0], full_edges[f][t][-m:]))
+ 	return score	
+
+outs=[]
 for k in found:
-	print len(k),found[k]
-	if 1 in k:
-		print k
+	s=score(k,found[k])
+	x=""
+	if 1 in k or 0 in k:
+		x="*"
+	outs.append((s,len(k),found[k],x))
+outs.sort()
+for out in outs:
+	print "\t".join(map(str,out))
 max_cost,g=print_graph(flr)
 local_fl,flow_cost=get_flow(g)
 print max_cost, flow_cost, local_fl
