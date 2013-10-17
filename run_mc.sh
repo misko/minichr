@@ -228,16 +228,23 @@ else
 fi
 
 echo running walker
-flows="0 1 2 4 8 16 32 64 128"
+offsets="0 10 20 30"
+multipliers="1 10 20"
+flows="0 1 128" # 2 4 8 16 32 64 128"
+for o in $offsets; do
+for m in $multipliers; do
 for flow in $flows; do
-	mkdir -p $wd/flows/f$flow
-	if [ ! -e ${wd}/flows/f$flow/walker_out -o ${wd}/hmm_out -nt ${wd}/flows/f$flow/walker_out ]; then
-		rm $wd/flows/f$flow/*
-		pushd $wd/flows/f$flow
-		$g/walker/walker $wd/nsubtract_centrosubtract_1000bp_joined $wd/nsubtract_centrosubtract_1000bp_joined_arc_coveage ${wd}/hmm_out $flow > ${wd}/flows/f$flow/walker_out
-		cat problem_file | $c > solved
-		python $g/walker/flow_to_graph.py problem_file solved 0.5 1000 | sed 's/,//g' > graph
+	d=$wd/flows/f${flow}/o${o}_m${m}/
+	mkdir -p $d
+	if [ 1 -lt 3 -o ! -e $d/walker_out -o ${wd}/hmm_out -nt $d/walker_out ]; then
+		echo Forcing walker run
+		rm $d/*
+		pushd $d
+		$g/walker/walker_pp $wd/nsubtract_centrosubtract_1000bp_joined $wd/nsubtract_centrosubtract_1000bp_joined_arc_coveage ${wd}/hmm_out $flow N $o $m > walker_out
+		zcat problem_file | $c | gzip > solved.gz
+		pypy $g/walker/flow_to_graph_v2.py problem_file.gz solved.gz `echo $m 2 | awk '{print $1/$2}'` $o 10000 | sed 's/,//g' > graph
 		popd
 	fi
 done
-
+done
+done
