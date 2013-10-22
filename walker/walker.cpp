@@ -270,19 +270,48 @@ void edge_info::poisson() {
 	normal+=2;
 	tumor+=2;
 
-	
-
+	//original formulation - CNVer
 	for (int i=0; i<SZ; i++) {
 		if (i==0 && min_copies==0) {
 			scores[i]=normal*(min_copies==0 ? 0.1 : min_copies)-tumor*log(normal*(min_copies==0 ? 0.1 : min_copies));
 		} else {
 			scores[i]=normal*(min_copies+i*multiplier)-tumor*log(normal*(min_copies+i*multiplier));
 		}
-		double d0 = min_copies+i*multiplier;
+		double d0 = (min_copies==0 ? 0.1 : min_copies) +i*multiplier;
+		double d1 = min_copies+(i+1)*multiplier;
+		diffs[i]=normal*multiplier-tumor*log( d1/d0);
+		diffs[i]=int(diffs[i]/10);
+	}	
+	int doc_ratio=(tumor/normal)/multiplier;	
+
+	//the funky chicken formulation - not CNVer
+	/*for (int i=doc_ratio; i<SZ; i++) {
+		if (i==0 && min_copies==0) {
+			scores[i]=normal*(min_copies==0 ? 0.1 : min_copies)-tumor*log(normal*(min_copies==0 ? 0.1 : min_copies));
+		} else {
+			scores[i]=normal*(min_copies+i*multiplier)-tumor*log(normal*(min_copies+i*multiplier));
+		}
+		double d0 = (min_copies==0 ? 0.1 : min_copies) +i*multiplier;
 		double d1 = min_copies+(i+1)*multiplier;
 		diffs[i]=normal*multiplier-tumor*log( d1/d0);
 		diffs[i]=int(diffs[i]/10);
 	}		
+	for (int i=1; i<=doc_ratio; i++) {
+		diffs[doc_ratio-i]=-diffs[doc_ratio+i];
+	}
+	if (doc_ratio==0 && tumor/normal>=1) {
+		int real_doc_ratio=tumor/normal;
+		double d0 = min_copies+real_doc_ratio;
+		double d1 = min_copies+2*real_doc_ratio;
+		diffs[0]=normal*real_doc_ratio-tumor*log( d1/d0);
+		diffs[0]=-int(diffs[0]/10);
+	}*/
+	//end of the funky chicken
+	if (doc_ratio<=6) {
+		for (int i=0; i<SZ; i++) {
+			diffs[i]=10*multiplier;
+		}
+	}
 
 	//make sure the min value is zero
 	double min=10e100;
@@ -406,6 +435,8 @@ void read_edges(char * filename) {
 			bool pass=true;
 		}
 
+
+
 		if (cp>min_hmm_cp || (ichra==ichrb && ( coordb-coorda<smoothing || pass))) {
 			//insert the nodes
 			if (ichra==ichrb && coordb-coorda>5) {
@@ -429,7 +460,12 @@ void read_edges(char * filename) {
 
 				ei.normal=normal/2;
 				ei.tumor=tumor/2;
-				ei.poisson();
+				ei.poisson();	
+	
+				if (ichra==18 && ichrb==18 && ( coordb==12993 || coorda==12993)) {
+					cerr << "XXX" << posa << " " << posb << " " << ei.tumor/ei.normal << " " << ei.diffs[0] << " " << ei.diffs[1] << endl;
+				}
+		
 
 
 				genomic_edges[efm]=ei;
@@ -938,6 +974,8 @@ void flow_solve(int contigs) {
 			} else {
 				i++;
 			}
+
+			//cost+=1000*multiplier; //TODO
 
 			cost=10; //TODO HARD CODED	
 			if (cap!=0) {
