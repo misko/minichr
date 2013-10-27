@@ -30,6 +30,7 @@
 
 
 #define MAX_EDGE_SIZE 2400
+//#define MAX_EDGE_SIZE 24000
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
@@ -636,12 +637,13 @@ int main(int argc, char ** argv) {
 	for (set<pos>::iterator it=bps.begin(); it!=bps.end(); ) {
 		pos current=*it;
 		if (current.chr!=last_chr) {
-			if (current.coord>MAX_EDGE_SIZE) {
+			/*if (current.coord>MAX_EDGE_SIZE) {
 				to_add.insert(pos(current.chr,current.coord-MAX_EDGE_SIZE));
 			} else {
 				cerr << "TOO CLOSE!" << current.str() << endl;
 				exit(1);
-			}
+			}*/
+			to_add.insert(pos(current.chr,MAX(MAX_EDGE_SIZE,current.coord)-MAX_EDGE_SIZE));
 			last_chr=current.chr;	
 			if (xprevious.chr!=0) {
 				to_add.insert(pos(xprevious.chr,xprevious.coord+MAX_EDGE_SIZE));
@@ -785,7 +787,7 @@ int main(int argc, char ** argv) {
 			for (int i=0; i<STATES; i++) {
 				if (normal_coverage>=30) {
 					if (i==0) {
-						emission[i]=-(((double)normal_coverage)*0.1)+cancer_coverage*log((((double)normal_coverage)*0.1));
+						emission[i]=-(((double)normal_coverage)*0.5)+cancer_coverage*log((((double)normal_coverage)*0.5));
 					} else {
 						emission[i]=-((double)normal_coverage*i)+cancer_coverage*log((normal_coverage*i));
 					}
