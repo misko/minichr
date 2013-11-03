@@ -36,6 +36,7 @@
 
 using namespace std;
 
+double tao = 0.0; //contamination
 
 double abs(double a) {
 	if (a<0) {
@@ -590,8 +591,15 @@ void read_cov(char * filename, bool normal) {
 			total_normal_coverage=total_coverage;
 			edges[mit->first].normal_coverage/=total_coverage;
 		} else {
+			if (total_normal_coverage<100) {
+				cerr << "Must read in normal before cancer coverages! " << endl;
+				exit(1);
+			}
 			total_cancer_coverage=total_coverage;
-			edges[mit->first].cancer_coverage/=total_coverage;
+			//edges[mit->first].cancer_coverage/=total_coverage; // old way without using tao
+			double rt = edges[mit->first].cancer_coverage; //grab number of reads in tumor sample
+			double rn = edges[mit->first].normal_coverage; // grab the fraction for normal, already a fraction!
+			edges[mit->first].cancer_coverage=(rt/total_cancer_coverage - tao*rn)*(1/(1-tao));
 		}
 	}
 
@@ -601,8 +609,8 @@ void read_cov(char * filename, bool normal) {
 
 int main(int argc, char ** argv) {
 	//need to load in files
-	if (argc!=4) {
-		printf("%s links cov_cancer cov_normal\n", argv[0]);
+	if (argc!=5) {
+		printf("%s links cov_cancer cov_normal contam(0-0.9)\n", argv[0]);
 		exit(1);
 	}
 
@@ -611,6 +619,11 @@ int main(int argc, char ** argv) {
 	char * links_filename=argv[1];
 	char * cov_cancer_filename=argv[2];
 	char * cov_normal_filename=argv[3];
+	tao=atof(argv[4]);
+	if (tao<0 || tao>0.9) {
+		cerr << "contam " << tao << " is not in range (0-0.9) " << endl;
+		exit(1);
+	}
 
 	cout << "#" << MAX_FLOW << "\t" << links_filename << "\t" << cov_cancer_filename << "\t" << cov_normal_filename << endl;
 
