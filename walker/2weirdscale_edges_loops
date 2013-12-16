@@ -1,0 +1,80 @@
+SOMATICW: 1	GENOMICW: 1
+0,0,0,0,0	:	
+	0,-231696,-303503,-353781,inf	:	-> (chr0:0,chr0:1,26,G)-> (chr1:203015763,chr1:203246644,52,G)-> (chr1:203246644,chr2:8912431,52,S)-> (chr2:8912431,chr2:8864662,78,G)-> (chr2:8864662,chr2:8848699,52,G)-> (chr2:8848699,chr2:8820428,26,G)-> (chr2:8820428,chr2:16174542,26,S)-> (chr2:16174542,chr2:16170477,26,G)-> (chr2:16170477,chr1:203705025,26,S)-> (chr1:203705025,chr1:203369070,26,G)-> (chr1:203369070,chr1:203266639,26,G)-> (chr1:203266639,chr1:204804363,26,S)-> (chr1:204804363,chr1:204720689,26,G)-> (chr1:204720689,chr1:204625362,26,G)-> (chr1:204625362,chr2:8864662,26,S)-> (chr2:8864662,chr2:8912431,78,G)-> (chr2:8912431,chr2:8917257,26,G)-> (chr2:8917257,chr2:8921728,26,G)-> (chr2:8921728,chr2:8931952,26,G)-> (chr2:8931952,chr2:8963783,26,G)-> (chr2:8963783,chr2:15743871,26,S)-> (chr2:15743871,chr2:15744183,26,G)-> (chr2:15744183,chr2:16073416,26,S)-> (chr2:16073416,chr2:16086121,26,G)-> (chr2:16086121,chr2:16086525,26,G)-> (chr2:16086525,chr2:8848699,26,S)-> (chr2:8848699,chr2:8864662,52,G)-> (chr2:8864662,chr2:8912431,78,G)-> (chr2:8912431,chr1:203246644,52,S)-> (chr1:203246644,chr1:203015763,52,G)
+GENOMIC:
+(chr1:201862828,chr1:202189702 , cp: 0 , cancer: 998 , normal: 102
+(chr1:202189702,chr1:202209755 , cp: 0 , cancer: 2668 , normal: 102
+(chr1:202209755,chr1:202215128 , cp: 0 , cancer: 1143 , normal: 102
+(chr1:202215128,chr1:202425257 , cp: 0 , cancer: 2825 , normal: 101
+(chr1:202427657,chr1:202427731 , cp: 0 , cancer: 138 , normal: 102
+(chr1:202427731,chr1:202709433 , cp: 0 , cancer: 3060 , normal: 102
+(chr1:202709433,chr1:202709642 , cp: 0 , cancer: 785 , normal: 102
+(chr1:202709642,chr1:202862653 , cp: 0 , cancer: 2761 , normal: 102
+(chr1:202862653,chr1:202869731 , cp: 0 , cancer: 1123 , normal: 102
+(chr1:202869731,chr1:202869943 , cp: 0 , cancer: 1082 , normal: 102
+(chr1:202869943,chr1:203015412 , cp: 0 , cancer: 1258 , normal: 102
+(chr1:203015763,chr1:203246644 , cp: 52 , cancer: 1251 , normal: 102
+(chr1:203266639,chr1:203369070 , cp: 26 , cancer: 2943 , normal: 102
+(chr1:203369070,chr1:203705025 , cp: 26 , cancer: 1206 , normal: 102
+(chr1:203705025,chr1:203739460 , cp: 0 , cancer: 2710 , normal: 102
+(chr1:203739460,chr1:203739600 , cp: 0 , cancer: 2208 , normal: 102
+(chr1:203739600,chr1:203739603 , cp: 0 , cancer: 402 , normal: 102
+(chr1:203739603,chr1:203888194 , cp: 0 , cancer: 2752 , normal: 102
+(chr1:203888194,chr1:204056467 , cp: 0 , cancer: 2765 , normal: 102
+(chr1:204056467,chr1:204060723 , cp: 0 , cancer: 1146 , normal: 102
+(chr1:204060723,chr1:204098935 , cp: 0 , cancer: 2812 , normal: 102
+(chr1:204099353,chr1:204163072 , cp: 0 , cancer: 2921 , normal: 102
+(chr1:204163072,chr1:204164224 , cp: 0 , cancer: 1024 , normal: 102
+(chr1:204164224,chr1:204460185 , cp: 0 , cancer: 2984 , normal: 102
+(chr1:204460185,chr1:204608941 , cp: 0 , cancer: 1240 , normal: 102
+(chr1:204625362,chr1:204720689 , cp: 26 , cancer: 3068 , normal: 102
+(chr1:204720689,chr1:204804363 , cp: 26 , cancer: 3038 , normal: 102
+(chr1:204804363,chr1:204804717 , cp: 0 , cancer: 524 , normal: 102
+(chr1:204804717,chr1:204833560 , cp: 0 , cancer: 2879 , normal: 101
+(chr1:204833560,chr1:204971128 , cp: 0 , cancer: 2940 , normal: 102
+(chr1:204971128,chr1:204978974 , cp: 0 , cancer: 1183 , normal: 102
+(chr1:204978974,chr1:205097026 , cp: 0 , cancer: 2840 , normal: 102
+(chr1:205097026,chr1:205098379 , cp: 0 , cancer: 2865 , normal: 102
+(chr1:205098379,chr1:205219579 , cp: 0 , cancer: 2750 , normal: 102
+(chr1:205221193,chr1:205356414 , cp: 0 , cancer: 1064 , normal: 102
+(chr2:8820428,chr2:8848699 , cp: 26 , cancer: 3291 , normal: 102
+(chr2:8848699,chr2:8864662 , cp: 52 , cancer: 2279 , normal: 102
+(chr2:8864662,chr2:8912431 , cp: 78 , cancer: 5488 , normal: 102
+(chr2:8912431,chr2:8917257 , cp: 26 , cancer: 4241 , normal: 102
+(chr2:8917257,chr2:8921728 , cp: 26 , cancer: 4335 , normal: 102
+(chr2:8921728,chr2:8931952 , cp: 26 , cancer: 4291 , normal: 101
+(chr2:8931952,chr2:8963783 , cp: 26 , cancer: 5433 , normal: 102
+(chr2:15743871,chr2:15744183 , cp: 26 , cancer: 1540 , normal: 102
+(chr2:16073416,chr2:16086121 , cp: 26 , cancer: 4922 , normal: 102
+(chr2:16086121,chr2:16086525 , cp: 26 , cancer: 3734 , normal: 102
+(chr2:16086525,chr2:16170477 , cp: 0 , cancer: 4862 , normal: 102
+(chr2:16170477,chr2:16174542 , cp: 26 , cancer: 2946 , normal: 102
+
+SOMATIC:
+(chr1:201862828,chr1:205356414 , cp: 0 , cancer: 971 , normal: 102
+(chr1:202189702,chr1:204060723 , cp: 0 , cancer: 1340 , normal: 102
+(chr1:202209755,chr1:202215128 , cp: 0 , cancer: 630 , normal: 101
+(chr1:202425257,chr1:204804717 , cp: 0 , cancer: 695 , normal: 102
+(chr1:202427731,chr1:205219579 , cp: 0 , cancer: 2044 , normal: 101
+(chr1:202709433,chr1:202709642 , cp: 0 , cancer: 652 , normal: 102
+(chr1:202862653,chr1:202869731 , cp: 0 , cancer: 1360 , normal: 102
+(chr1:202869943,chr1:204056467 , cp: 0 , cancer: 1379 , normal: 102
+(chr1:203015412,chr1:203015763 , cp: 0 , cancer: 1277 , normal: 102
+(chr1:203246644,chr2:8912431 , cp: 52 , cancer: 1222 , normal: 102
+(chr1:203266639,chr1:204804363 , cp: 26 , cancer: 2322 , normal: 102
+(chr1:203369070,chr1:204164224 , cp: 0 , cancer: 1913 , normal: 102
+(chr1:203705025,chr2:16170477 , cp: 26 , cancer: 951 , normal: 101
+(chr1:204098935,chr1:204099353 , cp: 0 , cancer: 2052 , normal: 102
+(chr1:204163072,chr1:204460185 , cp: 0 , cancer: 1774 , normal: 102
+(chr1:204608941,chr2:8931952 , cp: 0 , cancer: 913 , normal: 102
+(chr1:204625362,chr2:8864662 , cp: 26 , cancer: 3652 , normal: 102
+(chr1:204720689,chr1:204833560 , cp: 0 , cancer: 120 , normal: 102
+(chr1:204971128,chr1:204978974 , cp: 0 , cancer: 1655 , normal: 102
+(chr1:205097026,chr1:205098379 , cp: 0 , cancer: 162 , normal: 102
+(chr1:205221193,chr2:16086121 , cp: 0 , cancer: 1060 , normal: 102
+(chr2:8820428,chr2:16174542 , cp: 26 , cancer: 2956 , normal: 102
+(chr2:8848699,chr2:16086525 , cp: 26 , cancer: 1102 , normal: 102
+(chr2:8917257,chr2:8921728 , cp: 0 , cancer: 123 , normal: 101
+(chr2:8963783,chr2:15743871 , cp: 26 , cancer: 4594 , normal: 102
+(chr2:15744183,chr2:16073416 , cp: 26 , cancer: 5316 , normal: 101
+

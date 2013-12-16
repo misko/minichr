@@ -95,7 +95,8 @@ def readxpb(fname):
 					outs[nid]=[]
 		elif line[0]=='a' and line[2]=='1' and line[3]=='\t' and line[4]=='3':
 			print >> sys.stderr, line
-			contigs[0]=int(line[6])
+			line=line.split()
+			contigs[0]=int(line[3])
 			print >> sys.stderr, "Considering ", contigs[0], "contigs"
 	#add in the funky edges	
 	outs[0]=[]
@@ -195,11 +196,11 @@ def outputxcplex():
 	print "Bounds"
 	for x in range(len(edges)):
 		print " f%d <= %d" % (x,edges[x][1])
-	print "Integers "
-	o=[]
-	for x in range(len(edges)):
-		o.append("f%d" % x)
-	print " ".join(o)
+	#print "Integers "
+	#o=[]
+	#for x in range(len(edges)):
+	#	o.append("f%d" % x)
+	#print " ".join(o)
 	print "End"
 
 outputxcplex()

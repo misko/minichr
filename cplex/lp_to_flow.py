@@ -32,7 +32,7 @@ h=open(sol_fname)
 for line in h:
 	if line[0]=='f':
 		line=line[1:-1].split()
-		fl=int(line[1])
+		fl=float(line[1])
 		e=int(line[0])
 		fn,tn,ty=edge_lookup[e]
 		if ty==0:

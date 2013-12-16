@@ -187,6 +187,7 @@ def read_flow_file(filename):
 		#if (f[0]=='chr21' or f[0]=='21' or f[0]==21) and 14366000<f[1]:
 		#	print >> sys.stderr, (f,t), u, used[(f,t)]['somatic']
 
+
 	sz=len(l_genomic_edges)+1
 	while sz>len(l_genomic_edges):
 		print >> sys.stderr, "ITERATION"

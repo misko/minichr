@@ -977,7 +977,7 @@ void flow_solve(int contigs) {
 
 			//cost+=1000*multiplier; //TODO
 
-			cost=10; //TODO HARD CODED	
+			cost=10*multiplier; //TODO HARD CODED	
 			if (cap!=0) {
 				ss << "c Somatic\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << ei.type << "\t" << cost << "\t" << cap << "\t" << ei.normal << "\t" << ei.tumor << endl;
 				ss << arc_strings(node_ids[e.posa],node_ids[e.posb],ei.type,low,cap,cost);
