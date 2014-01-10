@@ -1,4 +1,0 @@
-minichr
-=======
-
-Mini Chromosome

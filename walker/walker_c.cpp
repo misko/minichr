@@ -270,6 +270,7 @@ void edge_info::poisson() {
 		cerr << normal << " " << tumor << "NORMAL OR TUMOR IS ZERO, is this ok?" << endl;
 	}
 
+
 	// a bit of smoothing like thing?
 	normal+=2;
 	tumor+=2;
@@ -286,8 +287,8 @@ void edge_info::poisson() {
 		diffs[i]=normal*multiplier-tumor*log( d1/d0);
 		diffs[i]=int(diffs[i]/10);
 	}	
-	int doc_ratio=(tumor/normal)/multiplier;	
-
+	//int doc_ratio=(tumor/normal)/multiplier;	
+	double doc_ratio=(((double)tumor)/normal);	
 	//the funky chicken formulation - not CNVer
 	/*for (int i=doc_ratio; i<SZ; i++) {
 		if (i==0 && min_copies==0) {
@@ -314,7 +315,8 @@ void edge_info::poisson() {
 	/*for (int i=0; i<SZ; i++) {
 		diffs[i]=(log(3+doc_ratio))*diffs[i];
 	}*/
-	if (doc_ratio<=3) {
+	//if (doc_ratio<=3.75) {
+	if (doc_ratio<=5) {
 		for (int i=0; i<SZ; i++) {
 			diffs[i]=(length/2000)*multiplier;
 		}
@@ -446,7 +448,7 @@ void read_edges(char * filename) {
 
 		if (cp>min_hmm_cp || (ichra==ichrb && ( coordb-coorda<smoothing || pass))) {
 			//insert the nodes
-			if (ichra==ichrb && coordb-coorda>5) {
+			if (ichra==ichrb && coordb-coorda>2) {
 				pos from = pos(ichra,coorda);
 				pos middle = pos(ichra,(coorda+coordb)/2);
 				pos to = pos(ichrb,coordb);
@@ -468,10 +470,11 @@ void read_edges(char * filename) {
 				ei.normal=normal/2;
 				ei.tumor=tumor/2;
 				ei.poisson();	
-	
-				if (ichra==18 && ichrb==18 && ( coordb==12993 || coorda==12993)) {
-					cerr << "XXX" << posa << " " << posb << " " << ei.tumor/ei.normal << " " << ei.diffs[0] << " " << ei.diffs[1] << endl;
-				}
+				//190231633	
+				//if (coordb==197952500 || (coorda+coordb)/2==197952500 ) {
+				//	cerr << "XXX" << posa << " " << posb << " " << ei.tumor << " " << ei.normal << " "  << ei.tumor/ei.normal << " " << ei.diffs[0] << " " << ei.diffs[1] << endl;
+				//	exit(1);
+				//}
 		
 
 

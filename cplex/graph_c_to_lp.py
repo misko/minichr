@@ -4,14 +4,16 @@ import sys
 import gzip
 
 
-if len(sys.argv)!=5:
-	print "%s problemxfile.gz edge_lookup Q somaticQ" % sys.argv[0]
+if len(sys.argv)!=7:
+	print "%s problemxfile.gz edge_lookup original_edges_wmapq Q somaticQ m" % sys.argv[0]
 	sys.exit(1)
 
 pb_fname=sys.argv[1]
 el_fname=sys.argv[2]
-Q=int(sys.argv[3])
-somaticQ=int(sys.argv[4])
+oe_fname=sys.argv[3]
+Q=int(sys.argv[4])
+somaticQ=int(sys.argv[5])
+m=int(sys.argv[6])
 #Q=500
 
 nodes={}
@@ -30,6 +32,38 @@ Somatic edges types
 
 edge_lookup=[]
 somatic_edges={}
+oe={}
+
+def read_oe(fn):
+	#chr1:1613433 31.6204
+	#chr2:136003458 44.4231
+	#chr2:136003458 44.4231
+	#chr1:1613433 31.6204
+	h=open(fn)
+	for line in h:
+		line=line.strip().split()
+		if line[0][:5]=="chr25":
+			continue
+		f=line[0]
+		mq=min(35,float(line[1]))
+		oe[f]=mq
+	h.close()
+	
+read_oe(oe_fname)
+
+def get_q(f1,f2):
+	sf1=0
+	if f1 in oe:
+		sf1=oe[f1]
+	else:
+		print >> sys.stderr, "MISSING ",f1
+	sf2=0
+	if f2 in oe:
+		sf2=oe[f2]	
+	else:
+		print >> sys.stderr, "MISSING ",f2
+	return m*(1+(35-sf1)/35+(35-sf2)/35)*somaticQ
+
 
 def add_edge(fn,tn,ty,cost,cap):
 	eid=len(edges)
@@ -72,7 +106,8 @@ def readxpb(fname):
 				ty=int(line[4])
 				cost=int(line[5])
 				#cost=int(Q)/2
-				cost=somaticQ
+				#cost=somaticQ
+				cost=get_q(line[2],line[3])
 				cap=int(line[6])
 				normal=int(line[7])
 				tumor=int(line[8])
@@ -110,7 +145,7 @@ def readxpb(fname):
 	outs[4]=[]
 	ins[6]=[]
 	outs[6]=[]
-	add_edge(4,2,0,Q,1000)
+	add_edge(4,2,0,m*Q,1000)
 	for node in nodes:
 		nid=nodes[node]
 		if nid>6:

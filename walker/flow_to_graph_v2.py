@@ -73,7 +73,7 @@ def read_problem_file(filename):
 			break_points.add(f)
 			break_points.add(t)
 			if (f,t) in genomic_edges:
-				print >> sys.stderr, "FAILED PRECONDITION"
+				print >> sys.stderr, "FAILED PRECONDITION",line
 				sys.exit(1)
 		elif line[1]=='Genomic':
 			#genomid line

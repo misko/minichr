@@ -30,7 +30,7 @@ using namespace std;
 #define MIN_SHARP	10
 #define SHARP_BP	15
 
-#define THREADS	1
+#define THREADS	8
 
 #define READ_SIZE	100000
 
