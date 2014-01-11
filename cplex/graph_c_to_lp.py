@@ -45,7 +45,8 @@ def read_oe(fn):
 		if line[0][:5]=="chr25":
 			continue
 		f=line[0]
-		mq=min(35,float(line[1]))
+		mq=float(line[1])
+		#mq=min(35,float(line[1])) #this is for MAPQ 
 		oe[f]=mq
 	h.close()
 	
@@ -62,7 +63,8 @@ def get_q(f1,f2):
 		sf2=oe[f2]	
 	else:
 		print >> sys.stderr, "MISSING ",f2
-	return m*(1+(35-sf1)/35+(35-sf2)/35)*somaticQ
+	#return m*(1+(35-sf1)/35+(35-sf2)/35)*somaticQ
+	return m*(1+(1-sf1)+(1-sf2))*somaticQ
 
 
 def add_edge(fn,tn,ty,cost,cap):
