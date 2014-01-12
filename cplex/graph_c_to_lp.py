@@ -4,8 +4,8 @@ import sys
 import gzip
 
 
-if len(sys.argv)!=7:
-	print "%s problemxfile.gz edge_lookup original_edges_wmapq Q somaticQ m" % sys.argv[0]
+if len(sys.argv)!=8:
+	print "%s problemxfile.gz edge_lookup original_edges_wmapq Q somaticQ m output_problem_file" % sys.argv[0]
 	sys.exit(1)
 
 pb_fname=sys.argv[1]
@@ -14,13 +14,14 @@ oe_fname=sys.argv[3]
 Q=int(sys.argv[4])
 somaticQ=int(sys.argv[5])
 m=int(sys.argv[6])
+oprob=sys.argv[7]
+oprobf=open(oprob,'w')
 #Q=500
 
 nodes={}
 ins={}
 outs={}
 edges=[]
-contigs=[0]
 
 '''
 Somatic edges types
@@ -87,6 +88,8 @@ def add_edge(fn,tn,ty,cost,cap):
 
 def readxpb(fname):
 	h=gzip.open(fname)
+	print_arc=0
+	arc_cost=0
 	for line in h:
 		if line[0]=='c':
 			if line[2]=='G':
@@ -101,6 +104,9 @@ def readxpb(fname):
 				fn=nodes[line[2]]
 				tn=nodes[line[3]]
 				add_edge(fn,tn,0,cost,cap)
+				print_arc=2
+				arc_cost=cost
+				print >> oprobf, line[0]+" "+"\t".join(line[1:])
 			elif line[2]=='S':
 				#c Somatic       chr1:814892     chrY:11934477   1       23      399     237     33
 				#ss << "c Somatic\t" << e.posa.str() << "\t" << e.posb.str() << "\t" << ei.type << "\t" << cost << "\t" << cap << "\t" << ei.normal << "\t" << ei.tumor << endl;
@@ -109,7 +115,7 @@ def readxpb(fname):
 				cost=int(line[5])
 				#cost=int(Q)/2
 				#cost=somaticQ
-				cost=get_q(line[2],line[3])
+				cost=int(get_q(line[2],line[3]))
 				cap=int(line[6])
 				normal=int(line[7])
 				tumor=int(line[8])
@@ -126,6 +132,10 @@ def readxpb(fname):
 				#	print len(edges)
 				#	sys.exit(1)
 				add_edge(fn,tn,ty,cost,cap)
+				print_arc=2
+				arc_cost=cost
+				line[5]=str(cost)
+				print >> oprobf, line[0]+" "+"\t".join(line[1:])
 			elif line[2]=='N':
 				#its a node
 				#c NODE 19 chr1:808212
@@ -135,11 +145,33 @@ def readxpb(fname):
 					nodes[line[3]]=nid
 					ins[nid]=[]
 					outs[nid]=[]
-		elif line[0]=='a' and line[2]=='1' and line[3]=='\t' and line[4]=='3':
-			print >> sys.stderr, line
+				print >> oprobf, " ".join(line)
+				print >> oprobf, "n\t"+line[2]+"\t0"
+			else:
+				print >> oprobf, line,
+		elif line[0]=='p':
+			print >> oprobf, line,
+		elif line[0]=='a':
+			#a       1       3       0       0       16
+			#a       4       2       0       0       16
+			#a       3       7       0       0       0
+			#a       8       4       0       0       0
 			line=line.split()
-			contigs[0]=int(line[3])
-			print >> sys.stderr, "Considering ", contigs[0], "contigs"
+			start_node=(int(line[1])+1)/2
+			end_node=(int(line[2])+1)/2
+			if (start_node==1 and end_node==2) or (start_node==2 and end_node==1):
+				line[5]=str(m*Q)
+				print >> oprobf, "\t".join(line)
+			elif start_node<=2 or end_node<=2:
+				line[5]="5"
+				print >> oprobf, "\t".join(line)
+			elif print_arc>0:
+				line[5]=str(arc_cost)
+				print >> oprobf, "\t".join(line)
+				print_arc-=1
+		elif line[0]=='n':
+			pass
+		
 	#add in the funky edges	
 	outs[2]=[]
 	ins[2]=[]
@@ -147,14 +179,14 @@ def readxpb(fname):
 	outs[4]=[]
 	ins[6]=[]
 	outs[6]=[]
-	add_edge(4,2,0,m*Q,1000)
+	add_edge(2,4,0,m*Q,1000)
 	for node in nodes:
 		nid=nodes[node]
 		if nid>6:
-			add_edge(2,nid,0,5,1000)
-			add_edge(2,nid,2,5,1000)
-			add_edge(nid,4,0,5,1000)
-			add_edge(nid,4,3,5,1000)
+			add_edge(4,nid,0,5,1000)
+			add_edge(4,nid,2,5,1000)
+			add_edge(nid,2,0,5,1000)
+			add_edge(nid,2,3,5,1000)
 	h.close()
 
 
