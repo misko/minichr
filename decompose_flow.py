@@ -69,9 +69,9 @@ def get_start_edge(e):
 def decrease(e,fn,tn):
 	e[fn][tn]-=1
 	if e[fn][tn]==0:
-		e[fn].pop(tn,None)
+		e[fn].pop(tn)
 	if len(e[fn])==0:
-		e.pop(fn,None)
+		e.pop(fn)
 
 
 
@@ -151,13 +151,50 @@ def print_seq(s):
 			l+=1
 	o+="-"+str(s[-1])
 	return o
-			
+		
+
+def is_primary(l):
+	l=canonical_loop(l)
+	try:
+		sa=l.index(1)
+		return True
+	except:
+		pass
+	return False	
+
+def loop_to_loops(l):
+	l=canonical_loop(l)
+	sa=-1
+	sb=-1
+	#l cannot have repeat element, but can go through source/sink on other side
+	try:
+		sa=l.index(1)
+	except ValueError:
+		pass
+	try:
+		sb=l.index(4)
+	except ValueError:
+		pass
+	if sa>=0 and sb>=0:
+		#this is a double loop
+		l1=l[:sb]
+		l2=canonical_loop(l[sb:])
+		return [l1,l2]
+	else:
+		return [l]
 
 all_loops={}
 
 
-def decompose(e):	
-	loops={}
+def decompose(oe):
+	e=edges_copy(oe)
+	sz=0
+	for fn in e:
+		for tn in e[fn]:
+			sz+=e[fn][tn]	
+	primary_loops={}
+	secondary_loops={}
+	
 	#find the neighbours
 	stack=[]
 	while True:
@@ -166,35 +203,138 @@ def decompose(e):
 			if start_edge==False:
 				break
 			decrease(e,start_edge[0],start_edge[1])
+			sz-=1
 			stack=[start_edge[0],start_edge[1]]
 		fn=stack[-1]
-		ns=[]
-		for tn in e[fn]:
-			for x in range(e[fn][tn]):
-				ns.append(tn)
-		if len(ns)==0:
-			break
-		#choose a neighbour 
-		tn=choice(ns)
-		decrease(e,fn,tn)
+		if len(e[fn])==1:
+			tn=e[fn].keys()[0]
+			decrease(e,fn,tn)
+		else:
+			ns=[]
+			for tn in e[fn]:
+				for x in range(e[fn][tn]):
+					ns.append(tn)
+			if len(ns)==0:
+				break
+			#choose a neighbour 
+			tn=choice(ns)
+			decrease(e,fn,tn)
+		sz-=1
 		if tn in stack:
 			#remove the loop!
 			idx=stack.index(tn)
-			loop=canonical_loop(stack[idx:])
-			if loop not in all_loops:
-				loops[loop]=0
-				loops[reverse_path(loop)]=0
-			loops[loop]+=1
-			loops[reverse_path(loop)]+=1
+			#loop=canonical_loop(stack[idx:])
+			lloops=loop_to_loops(stack[idx:])
+			for loop in lloops:
+				print print_seq(loop),
+				d=None
+				if is_primary(loop):
+					print "PRIMARY"
+					d=primary_loops
+				else:
+					print "SECONDARY"
+					d=secondary_loops
+				if loop not in d:
+					d[loop]=0
+					d[reverse_path(loop)]=0
+				d[loop]+=1
+				d[reverse_path(loop)]+=1
 			stack=stack[:idx]
 		stack.append(tn)
+	
+	#lets find out which nodes bring flow into secondary loops
+	#first lets build dictionary of secondary_loop -> dict
+	secondary_loops_ins={}
+	for loop in secondary_loops:
+		secondary_loops_ins[loop]={}
+	for fn in oe:
+		for tn in oe[fn]:
+			for loop in secondary_loops_ins:
+				if fn not in loop and tn in loop:
+					secondary_loops_ins[loop][tn]=oe[fn][tn]
+
+	for loop in secondary_loops_ins:
+		print print_seq(loop)
+		for tn in secondary_loops_ins[loop]:
+			print "\t"+str(secondary_loops_ins[loop][tn])+"\t"+str(tn)
+	
+	for loop in secondary_loops_ins:
+		print print_seq(loop)
+		c={}
+		try:
+			for x in range(len(loop)-1):
+				y=oe[loop[x]][loop[x+1]]
+				if y not in c:
+					c[y]=0
+				c[y]+=1
+			print c
+		except:
+			loop=reverse_path(loop)
+			for x in range(len(loop)-1):
+				y=oe[loop[x]][loop[x+1]]
+				if y not in c:
+					c[y]=0
+				c[y]+=1
+			print c
+			
+		
+	
+				
+					
+	print sz
+	sys.exit(1)
 	return loops
+
+def reachable_without(oe,fn,tn):
+	e=edges_copy(oe)
+	decrease(e,fn,tn)
+	visited=set([1,2])
+	if tn in (1,2):
+		return True
+	q=[1,2]
+	while len(q)>0:
+		n=q.pop() #DFS if pop from back, BFS if pop from front?
+		for t in e[n]:
+			if tn==t:
+				return True
+			if t not in visited:
+				visited.add(t)
+				q.append(t)
+	return False
+	
+		
+	
+
+def connected_components_without(oe,fn,tn):
+	e=edges_copy(oe)
+	decrease(e,fn,tn)
+	return unsafe_connected_components(e)
+
+def unsafe_connected_components(e):
+	cc=0
+	while len(e)>0:
+		#grab the first node
+		stack=[e.keys()[0]]
+		while len(stack)>0:
+			fn=stack.pop()
+			if fn in e:
+				for tn in e[fn]:
+					stack.append(tn)
+				e.pop(fn)
+		cc+=1
+	return cc
+
+def connected_components(oe):
+	e=edges_copy(oe)
+	return unsafe_connected_components(e)
 
 def edges_copy(e):
 	ne={}
 	for x in e:
 		ne[x]=e[x].copy()
 	return ne
+
+
 
 
 all_loops=decompose(edges_copy(edges))
