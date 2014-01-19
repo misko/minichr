@@ -2,12 +2,15 @@ import sys
 
 from random import choice
 
-if len(sys.argv)!=3:
-	print "%s flow_file out"
+if len(sys.argv)!=4:
+	print "%s flow_file out out_master"
 	sys.exit(1)
 
 flow_filename=sys.argv[1]
 out_filename=sys.argv[2]
+out_master_filename=sys.argv[3]
+
+
 
 flow_file=open(flow_filename)
 
@@ -227,7 +230,8 @@ def loop_to_loop(l1,l2):
 def cplexout(lines,loops,candidates,filename):
 	#should really remove length 1 and copy count 1 candidates
 	#lmbda=1
-	lmbda=-0.3
+	#lmbda=-0.3
+	lmbda=60
 	new_candidates=[]
 	for c in candidates:
 		r=[]
@@ -362,14 +366,12 @@ def sloop_candidates_r(depth,s):
 	return r
 
 
-def decompose(oe):
+def decompose(oe,lines,loops):
 	e=edges_copy(oe)
 	sz=0
 	for fn in e:
 		for tn in e[fn]:
 			sz+=e[fn][tn]	
-	lines={}
-	loops={}
 	
 	#find the neighbours
 	stack=[]
@@ -412,162 +414,14 @@ def decompose(oe):
 					d=loops
 				if loop not in d:
 					d[loop]=0
-					d[(reverse_path(loop[0]),)]=0
 				d[loop]+=1
-				d[(reverse_path(loop[0]),)]+=1
 			stack=stack[:idx]
 			#if len(loops)>3 and len(lines)>3:
 			#	break
 		stack.append(tn)
 
 
-
-	#find loop links	
-	sloops=set(loops.keys())
-	quick_loop_links=set()
-	checked_loops=set()
-	loop_links=set()
-	for loop in sloops:
-		for loopy in sloops:
-			new_loop=join_loops(loop,loopy)
-			if new_loop in checked_loops:
-				continue
-			checked_loops.add(new_loop)
-			if len(loop_to_loop(loop,loopy))>0:
-			
-				quick_loop_links.add(sum(map(sum,loop))+sum(map(sum,loopy)))
-				loop_links.add(new_loop)
-	
-	#find the line links
-	quick_line_loop_links=set()
-	line_loop_links=set()
-	for line in lines:
-		for loop in sloops:
-			new_loop=join_loops(line,loop)
-			if new_loop in checked_loops:
-				continue
-			checked_loops.add(new_loop)
-			if len(loop_to_loop(line,loop))>0:
-				line_loop_links.add(new_loop)
-				quick_line_loop_links.add(sum(line[0])+sum(map(sum,loop)))
-	
-	for x in line_loop_links:
-		print "XY",print_seq(x)
-
-	
-	#find super loops
-	checked_loops=set()
-	while True:
-		mx=0
-		new_loops=[]
-		for loop in sloops:
-			if loop in checked_loops:
-				continue
-			checked_loops.add(loop)
-			for loopy in sloops:
-				if len(loopy)!=1:
-					continue
-				if loopy[0] in loop:
-					continue
-				for subloop in loop:
-					if loops[loopy]>3*len(loop):
-						s=sum(subloop)+sum(loopy[0])
-						if s not in quick_loop_links:
-							continue
-						new_loop=join_loops((subloop,),loopy)
-						if new_loop in loop_links:
-							#add it
-							new_loops.append(join_loops(loop,loopy))
-		for new_loop in new_loops:
-			mx=max(mx,len(new_loop))
-			sloops.add(new_loop)
-		print len(sloops),mx
-		if len(new_loops)==0:
-			break
-	
-	#add super loops to the candidates
-	print "CANDIDATES"
-	candidates=[]
-	for sloop in sloops:
-		print "process candidates..."
-		new_candidates=sloop_candidates(3,sloop)
-		candidates+=new_candidates
-		#check for line attachments
-		for line in lines:
-			for loop in sloop:
-				new_loop=join_loops(line,loop)
-				if new_loop in line_loop_links:
-					for nc in new_candidates:
-						d=nc.copy()
-						d[line[0]]=1
-						candidates.append(d)
-					break
-			
-					
-	#try to print the basic lp solve function
-	cplexout(lines,loops,candidates,out_filename)	
-	sys.exit(1)	
-	
-
-
-
-
-	#find line to loop links
-	
-
-	
-	#find line to superloops
-
-	#compute candidate contigs
-
-	#print out IP/LP
-
-	#solve
-
-	sys.exit(1)	
-
-	#lets find out which nodes bring flow into secondary loops
-	#first lets build dictionary of secondary_loop -> dict
-	loops_ins={}
-	for loop in loops:
-		loops_ins[loop]={}
-	for fn in oe:
-		for tn in oe[fn]:
-			for loop in loops_ins:
-				if fn not in loop and tn in loop:
-					loops_ins[loop][tn]=oe[fn][tn]
-
-	for loop in loops_ins:
-		print print_seq(loop)
-		for tn in loops_ins[loop]:
-			print "\t"+str(loops_ins[loop][tn])+"\t"+str(tn)
-	
-	for loop in loops_ins:
-		print print_seq(loop)
-		c={}
-		try:
-			for x in range(len(loop)-1):
-				y=oe[loop[x]][loop[x+1]]
-				if y not in c:
-					c[y]=0
-				c[y]+=1
-			print c
-		except:
-			loop=reverse_path(loop)
-			for x in range(len(loop)-1):
-				y=oe[loop[x]][loop[x+1]]
-				if y not in c:
-					c[y]=0
-				c[y]+=1
-			print c
-			
-		
-	
-				
-					
-	print sz
-	sys.exit(1)
-	return loops
+	return 
 
 def reachable_without(oe,fn,tn):
 	e=edges_copy(oe)
@@ -618,100 +472,20 @@ def edges_copy(e):
 		ne[x]=e[x].copy()
 	return ne
 
+out_file=open(out_filename,'w')
+out_master_file=open(out_master_filename,'w')
+lines={}
+loops={}
+for x in range(100):
+	decompose(edges,lines,loops)
+
+for x in lines:
+	print >> out_file, str(x)
+	print >> out_master_file, "LINE", str(x)
+
+for x in loops:
+	print >> out_file, str(x)
+	print >> out_master_file, "LOOP", str(x)
 
 
 
-all_loops=decompose(edges_copy(edges))
-
-
-#get spectrum
-
-d={}
-c={}
-k=20
-for loop in all_loops:
-	for x in range(len(loop)+k-1):
-		z=[]
-		for y in range(k):
-			z.append(loop[(x+y)%len(loop)])
-		n=z[0]
-		nr=n
-		if n%2==0:
-			nr-=1
-		else:
-			n+=1
-		if n in funky_nodes or nr in funky_nodes:
-			z=tuple(z)
-			if z not in d:
-				d[z]=0
-			d[z]+=1
-			if z[0] not in c:
-				c[z[0]]={}
-			if z[-1] not in c[z[0]]:
-				c[z[0]][z[-1]]=0
-			c[z[0]][z[-1]]+=1
-
-ks=[]
-for k in d:
-	ks.append((d[k],k))
-
-ks.sort()
-print ks
-
-
-sys.exit(1)
-		
-
-
-#do some funky stuff
-
-finals=set()
-
-cutoff=0.3
-for node in funky_nodes:
-	
-	go_on=True
-
-	#check if already found somewhere
-	for f in finals:
-		if node in f:
-			go_on=False
-			break
-	if go_on==False:
-		continue
-
-			
-	dist={(node,):1}
-	while go_on:
-		go_on=False # need to find one with higher then cutoff to go on
-		new_dist={}
-		sum=0
-		for s in dist:
-			for loop in all_loops:	
-				oc=ocount(loop,s)
-				for x in oc:
-					k=s+(x,)
-					if k not in new_dist:
-						new_dist[k]=0.0
-					new_dist[k]+=oc[x]
-					sum+=oc[x]*all_loops[loop]
-		for s in new_dist:
-			new_dist[s]/=sum
-			if new_dist[s]>=cutoff:
-				go_on=True
-				dist=new_dist
-	for x in dist:
-		if len(x)>2:
-			#check if this supers any other finals
-			to_remove=set()
-			for f in finals:
-				if is_subsequence(f,x):
-					to_remove.add(f)
-			for f in to_remove:
-				finals.remove(f)
-			finals.add(x)
-			print print_seq(x)
-
-
-for f in finals:
-	print print_seq(f)	

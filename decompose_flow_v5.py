@@ -2,12 +2,13 @@ import sys
 
 from random import choice
 
-if len(sys.argv)!=3:
-	print "%s flow_file out"
+if len(sys.argv)!=4:
+	print "%s flow_file out alpha"
 	sys.exit(1)
 
 flow_filename=sys.argv[1]
 out_filename=sys.argv[2]
+alpha=float(sys.argv[3])
 
 flow_file=open(flow_filename)
 
@@ -226,8 +227,6 @@ def loop_to_loop(l1,l2):
 #same for loops
 def cplexout(lines,loops,candidates,filename):
 	#should really remove length 1 and copy count 1 candidates
-	#lmbda=1
-	lmbda=-0.3
 	new_candidates=[]
 	for c in candidates:
 		r=[]
@@ -265,7 +264,7 @@ def cplexout(lines,loops,candidates,filename):
 	#generate the objective 
 	obj=[]
 	for x in range(len(idxs)):
-		obj.append(str(lmbda)+' m'+str(x))
+		obj.append(str(alpha)+' m'+str(x))
 		obj.append('i'+str(x))
 	#for x in idxs:
 	#	obj.append(str(lmbda)+' m'+str(idxs[x]))

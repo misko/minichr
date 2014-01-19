@@ -73,7 +73,11 @@ def get_q(f1,f2):
 	else:
 		print >> sys.stderr, "MISSING ",f2
 	#return m*(1+(35-sf1)/35+(35-sf2)/35)*somaticQ
-	return m*(1+(1-sf1)+(1-sf2))*somaticQ
+	if somaticQ>0:
+		return m*(1+(1-sf1)+(1-sf2))*somaticQ
+	else:
+		return m*(1+sf1+sf2)*somaticQ
+		
 
 
 def canon_edge(fn,tn):
@@ -188,20 +192,21 @@ def readxpb(fname):
 			pass
 		
 	#add in the funky edges	
-	#outs[2]=[]
-	#ins[2]=[]
-	#ins[4]=[]
-	#outs[4]=[]
-	#ins[6]=[]
-	#outs[6]=[]
+	outs[2]=[]
+	ins[2]=[]
+	ins[4]=[]
+	outs[4]=[]
+	ins[6]=[]
+	outs[6]=[]
+	add_edge(2,4,0,0,1000)
 	#add_edge(2,4,0,m*Q,1000)
-	#for node in nodes:
-	#	nid=nodes[node]
-	#	if nid>6:
-	#		add_edge(4,nid,0,5,1000)
-	#		add_edge(4,nid,2,5,1000)
-	#		add_edge(nid,2,0,5,1000)
-	#		add_edge(nid,2,3,5,1000)
+	for node in nodes:
+		nid=nodes[node]
+		if nid>6:
+			add_edge(4,nid,0,5,1000)
+			add_edge(4,nid,2,5,1000)
+			add_edge(nid,2,0,5,1000)
+			add_edge(nid,2,3,5,1000)
 	h.close()
 
 
@@ -214,9 +219,9 @@ e2sc={}
 for sci in range(len(simple_contigs)):
 	sc=simple_contigs[sci]
 	esc={}
-	for x in range(len(sc)-1):
-		fn=sc[x]
-		tn=sc[x+1]
+	for x in range(len(sc)):
+		fn=sc[x%len(sc)]
+		tn=sc[(x+1)%len(sc)]
 		fn,tn=canon_edge(fn,tn)
 		if fn>4 and tn>4:
 			if (fn,tn) not in esc:
@@ -260,9 +265,9 @@ def outputxcplex(m,Q):
 	objxfunc=[]
 	for x in range(len(edges)):
 		eid,fn,tn,ty=edge_lookup[x]
-		if (fn,tn) in e2sc:
-			if edges[x][0]!=0:
-				objxfunc.append("%d f%d" % (edges[x][0],x))
+		if edges[x][0]!=0:
+			objxfunc.append("%d f%d" % (edges[x][0],x))
+		
 	for sci in range(len(simple_contigs)):
 		objxfunc.append("%d i%d" % (m*Q,sci))
 	print "Minimize\n obj:",
@@ -293,6 +298,10 @@ def outputxcplex(m,Q):
 		for tn in redges[fn]:
 			c=[]
 			if (fn,tn) not in e2sc:
+				for eid in redges[fn][tn]:
+					 c.append(" - f%d" % (eid))
+				print " z%d: " % constraint,"".join(c)," = 0"
+				constraint+=1
 				continue
 			for eid in redges[fn][tn]:
 				 c.append(" - f%d" % (eid))
@@ -316,12 +325,18 @@ def outputxcplex(m,Q):
 		eid,fn,tn,ty=edge_lookup[x]
 		if (fn,tn) in e2sc:
 			print "0 <= f%d <= %d" % (x,edges[x][1])
+		else:
+			print "0 <= f%d <= %d" % (x,0)
 	print "Binary"
 	for x in range(len(simple_contigs)):
-		print "i%d " % x
+		print "i%d " % x,
+	print ""
 	print "Integers "
 	for x in range(len(simple_contigs)):
-		print "c%d " % x
+		print "c%d " % x,
+	for x in range(len(edges)):
+		print "f%d " % x,
+	print ""
 	#o=[]
 	#for x in range(len(edges)):
 	#	o.append("f%d" % x)

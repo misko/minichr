@@ -53,7 +53,7 @@ function mwalker {
 	#do the IP stuff
 	zcat Qproblem_file_q${i}sq${sq}_m${m}.solved.gz  > Qproblem_file_q${i}sq${sq}_m${m}.solved.tmp
 	pypy $g/decompose_and_report.py Qproblem_file_q${i}sq${sq}_m${m}.solved.tmp decompositions_q${i}sq${sq}_m${m}.loops decompositions_q${i}sq${sq}_m${m}.loops.full
-	pypy /filer/misko/mini_chr/git/minichr/cplex/graph_c_to_lp_wsimple.py problem_file_q${i}sq${sq}_m${m}.gz el_q${i}sq${sq}_m${m}.gz nsubtract_centrosubtract_1000bp_mqs ${i} ${sq} ${m} Qproblem_file_q${i}sq${sq}_m${m}.tmp decompositions_q${i}sq${sq}_m${m}.loops > ip_prob_q${i}sq${sq}_m${m}.lp
+	pypy /filer/misko/mini_chr/git/minichr/cplex/graph_c_to_lp_wsimple.py problem_file_q${i}sq${sq}_m${m}.gz el_q${i}sq${sq}_m${m}.gz nsubtract_centrosubtract_1000bp_mqs ${i} `expr ${sq} / 2` ${m} Qproblem_file_q${i}sq${sq}_m${m}.tmp decompositions_q${i}sq${sq}_m${m}.loops > ip_prob_q${i}sq${sq}_m${m}.lp
 
 	#wait for IP solver
 	#touch ip_prob_q${i}sq${sq}_m${m}.lp.go
@@ -80,5 +80,5 @@ function mwalker {
 
 #mwalker 1350 300 3 # contigQ somatic_base_Q multiplier 
 
-mwalker 1350 150 3 # contigQ somatic_base_Q multiplier 
+mwalker 1350 290 3 # contigQ somatic_base_Q multiplier 
 

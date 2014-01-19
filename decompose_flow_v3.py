@@ -227,7 +227,8 @@ def loop_to_loop(l1,l2):
 def cplexout(lines,loops,candidates,filename):
 	#should really remove length 1 and copy count 1 candidates
 	#lmbda=1
-	lmbda=-0.3
+	#lmbda=-0.3
+	lmbda=0
 	new_candidates=[]
 	for c in candidates:
 		r=[]

@@ -50,35 +50,23 @@ function mwalker {
 	#update graph with no flows
 	pypy /filer/misko/mini_chr/git/minichr/insert_no_flows.py Qg_lp_q${i}sq${sq}_m${m} hmm > Qg_lp_q${i}sq${sq}_m${m}_whmm
 
+
 	#do the IP stuff
-	zcat Qproblem_file_q${i}sq${sq}_m${m}.solved.gz  > Qproblem_file_q${i}sq${sq}_m${m}.solved.tmp
-	pypy $g/decompose_and_report.py Qproblem_file_q${i}sq${sq}_m${m}.solved.tmp decompositions_q${i}sq${sq}_m${m}.loops decompositions_q${i}sq${sq}_m${m}.loops.full
-	pypy /filer/misko/mini_chr/git/minichr/cplex/graph_c_to_lp_wsimple.py problem_file_q${i}sq${sq}_m${m}.gz el_q${i}sq${sq}_m${m}.gz nsubtract_centrosubtract_1000bp_mqs ${i} ${sq} ${m} Qproblem_file_q${i}sq${sq}_m${m}.tmp decompositions_q${i}sq${sq}_m${m}.loops > ip_prob_q${i}sq${sq}_m${m}.lp
-
-	#wait for IP solver
-	#touch ip_prob_q${i}sq${sq}_m${m}.lp.go
-	#while [ -e ip_prob_q${i}sq${sq}_m${m}.lp.go ] ; do
-	#	sleep $[ ( $RANDOM % 25 )  + 1 ]
-	#done
-
-	/dupa-filer/misko/gurobi/gurobi550/linux64/bin/gurobi_cl MIPGap=0 ResultFile=ip_prob_q${i}sq${sq}_m${m}.lp.sol ip_prob_q${i}sq${sq}_m${m}.lp
-	cat ip_prob_q${i}sq${sq}_m${m}.lp.sol  | grep c | awk '{if ($2>0) {print $0}}'  | pypy $g/cplex/contigs_to_flow.py decompositions_q${i}sq${sq}_m${m}.loops | gzip > ip_prob_q${i}sq${sq}_m${m}.lp.flow.gz
-	pypy $g/walker/flow_to_graph_v2_noerror.py Qproblem_file_q${i}sq${sq}_m${m}.gz ip_prob_q${i}sq${sq}_m${m}.lp.flow.gz ${m} 0 1000 > Qg_ip_q${i}sq${sq}_m${m}
-
-	cat ip_prob_q${i}sq${sq}_m${m}.lp.sol  | awk '{if ($2>0) {print $0}}' | grep "^c" | while read line; do 
-		z=`echo $line | awk '{print $1}'`_m`echo $line | awk '{print $2}'`
-		echo $line | pypy /filer/misko/mini_chr/git/minichr/cplex/contigs_to_flow.py decompositions_q${i}sq${sq}_m${m}.loops | gzip > $z.gz
-		pypy /filer/misko/mini_chr/git/minichr/walker/flow_to_graph_v2_noerror.py Qproblem_file_q${i}sq${sq}_m${m}.gz $z.gz ${m} 0 1000 > g_q${i}sq${sq}_m${m}_${z}
+	zcat Qproblem_file_q1350sq300_m3.solved.gz  > Qproblem_file_q1350sq300_m3.solved.tmp
+	pypy $g/decompose_and_report.py Qproblem_file_q1350sq300_m3.solved.tmp decompositions.loops decompositions.loops.full
+	pypy /filer/misko/mini_chr/git/minichr/cplex/graph_c_to_lp_wsimple.py problem_file_q${i}sq${sq}_m${m}.gz el_q${i}sq${sq}_m${m}.gz nsubtract_centrosubtract_1000bp_mqs ${i} ${sq} ${m} Qproblem_file_q${i}sq${sq}_m${m}.tmp decompositions.loops > ip_prob_q${i}sq${sq}_m${m}.lp
+	touch ip_prob_q${i}sq${sq}_m${m}.lp.go
+	while [ -e ip_prob_q${i}sq${sq}_m${m}.lp.go ] ; do
+		sleep $[ ( $RANDOM % 25 )  + 1 ]
 	done
-
-	rm Qproblem_file_q${i}sq${sq}_m${m}.solved.tmp
+	#/dupa-filer/misko/gurobi/gurobi550/linux64/bin/gurobi_cl MIPGap=0 ResultFile=ip_prob_q${i}sq${sq}_m${m}.lp.sol ip_prob_q${i}sq${sq}_m${m}.lp
+	cat ip_prob_q${i}sq${sq}_m${m}.lp.sol  | grep c | awk '{if ($2>0) {print $0}}'  | pypy $g/cplex/contigs_to_flow.py decompositions.loops | gzip > ip_prob_q${i}sq${sq}_m${m}.lp.flow.gz
+	pypy $g/walker/flow_to_graph_v2_noerror.py Qproblem_file_q${i}sq${sq}_m${m}.gz ip_prob_q${i}sq${sq}_m${m}.lp.flow.gz ${m} 0 1000 > Qg_ip_q${i}sq${sq}_m${m}
+	rm Qproblem_file_q1350sq300_m3.solved.tmp
 	popd 
 }
 
 #run overlaps
 #mwalker 4000 1000
-
-#mwalker 1350 300 3 # contigQ somatic_base_Q multiplier 
-
-mwalker 1350 150 3 # contigQ somatic_base_Q multiplier 
+mwalker 1350 300 3 # contigQ somatic_base_Q multiplier 
 
