@@ -9,7 +9,7 @@ cols=4
 
 def get_set(l):
 	s=set()
-	l=l.replace('*','').replace('-','').split(',')
+	l=l.replace('-','').split(',')
 	for g in l:
 		if len(g)>0:
 			s.add(g)
@@ -27,6 +27,10 @@ for line in sys.stdin:
 	for x in range(cols):
 		patient[line[0]][x].update(get_set(line[3+x]))
 	# add to lookup
+	if line[1] not in cancers:
+		cancers[line[1]]=set()
+	cancers[line[1]].add(line[0])		
+	line[1]='all'
 	if line[1] not in cancers:
 		cancers[line[1]]=set()
 	cancers[line[1]].add(line[0])		
@@ -55,6 +59,7 @@ for c in cancers:
 	for x in range(cols):
 		l=[]
 		oo=[]
+		ooo=[]
 		for g in gs[x]:
 			l.append((gs[x][g],g))
 		l.sort(reverse=True)
@@ -67,7 +72,11 @@ for c in cancers:
 				for c,g in l:
 					if c==mx:
 						oo.append(g)
+					elif c==mx-1:
+						ooo.append(g)
 				o.append(str(mx)+"|"+",".join(oo))
+				#if len(ooo)>0:
+				#	o[-1]+=("/" +str(mx-1)+"|"+",".join(ooo))
 		else:
 			oo.append('-')
 			o.append(",".join(oo))

@@ -61,7 +61,6 @@ def read_problem_file(filename):
 				somatic_edges[(f,t)]=typ
 			if (f,t) in genomic_edges:
 				print >> sys.stderr, "FAILED PRECONDITION",line
-				sys.exit(1)
 		elif line[1]=='Genomic':
 			#genomid line
 			#c Genomic       chr2:8917257    chr2:8921728 cap length normal tumor
@@ -137,8 +136,8 @@ def read_onco(onco_filename):
 
 def gene_intersect(ogenes,z):
 	chr,s,e=z
-	genes=set()
-	genes_interrupted=set()
+	genes={}
+	genes_interrupted={}
 	for gchr,gs,ge,gg,gst in ogenes:
 		if gchr!=chr:
 			continue
@@ -148,10 +147,18 @@ def gene_intersect(ogenes,z):
 			#some overlap
 			if ge<=e and gs>=s:
 				#contained
-				genes.add(gg)
+				#genes.add(gg)
+				if gg not in genes:
+					genes[gg]=0
+				if gg=="KCNMB3":
+					print gg,z
+				genes[gg]+=1
 			else:
 				#partial
-				genes_interrupted.add(gg)
+				#genes_interrupted.add(gg)
+				if gg not in genes_interrupted:
+					genes_interrupted[gg]=0
+				genes_interrupted[gg]+=1
 	return genes,genes_interrupted
 		
 
@@ -181,6 +188,7 @@ read_problem_file(problem_filename)
 onco=read_onco(onco_filename)
 simple_walks=[]
 
+print cis
 for ci,cm in cis:
 	ty,c=simple_contigs[ci]
 	walk=[]
@@ -195,6 +203,7 @@ for ci,cm in cis:
 			walk.append([fnp,tnp])
 		else:
 			walk[-1][1]=tnp
+	print walk
 	simple_walks.append((ty,cm,walk))
 
 segs={}
@@ -205,8 +214,12 @@ gi_loops={}
 lines=[]
 loops=[]
 total_new_dna=0
+i=0
 for ty,cm,w in simple_walks:
+	i+=1
+	print "WALK",i
 	l=0
+	lsegs={}
 	for fn,tn in w:
 		schr,scoord=fn
 		echr,ecoord=tn
@@ -222,18 +235,16 @@ for ty,cm,w in simple_walks:
 			sys.exit(1)
 		
 		#update segs
-		if schr not in segs:
-			segs[schr]={}
-		if cm not in segs[schr]:
-			segs[schr][cm]=0
-		segs[schr][cm]+=1
+		k=(schr,scoord,ecoord)
+		if k not in lsegs:
+			lsegs[k]=0
+		lsegs[k]+=1
 
 		#update length
 		l+=ecoord-scoord
 
 		#update genes and interrupted genes		
 		g1,g2=gene_intersect(genes,(schr,scoord,ecoord))
-		print g1,g2
 		if ty=="LOOP":
 			for g in g1:
 				if g not in gf_loops:
@@ -264,7 +275,14 @@ for ty,cm,w in simple_walks:
 	else:
 		print "BIGBIG ERROR"
 		sys.exit(1)
-	print cm,l,len(w),w
+	for schr,scoord,ecoord in lsegs:
+		if schr not in segs:
+			segs[schr]={}
+		k=cm*lsegs[(schr,scoord,ecoord)]
+		if k not in segs[schr]:
+			segs[schr][k]=0
+		segs[schr][k]+=1
+	print ty,cm,l,len(w),w
 
 
 def bin_genes(bins,genes):
@@ -274,11 +292,13 @@ def bin_genes(bins,genes):
 	for gene in genes:
 		for b in bins:
 			if genes[gene]>=b:
+				if gene=="TNRC6C":
+					print genes[gene],b
 				genes_amp[b][gene]=genes[gene]
-				break
+				#break
 	#format string
 	o=[]
-	for bin in genes_amp:
+	for bin in bins:
 		oo=[]
 		oncos=[]
 		for gene in genes_amp[bin]:
@@ -300,14 +320,16 @@ def bin_genes(bins,genes):
 def bin_contigs(c,sz,bins):
 	contigs_amp={}
 	for bin in bins:
-		contigs_amp[bin]=[0,0]
+		contigs_amp[bin]=[0,0,0,0]
 	for cm,l in c:
 		for b in bins:
 			if cm>=b:
 				if l>sz:
-					contigs_amp[b][1]+=1
+					contigs_amp[b][2]+=1
+					contigs_amp[b][3]+=l
 				else:
 					contigs_amp[b][0]+=1
+					contigs_amp[b][1]+=l
 				break
 	o=[]
 	for bin in bins:
@@ -325,8 +347,8 @@ def bin_segs(segs,bins):
 				if x>=bin:
 					if chr not in segs_bin[bin]:
 						segs_bin[bin][chr]=0
-					segs_bin[bin][chr]+=1
-					break
+					segs_bin[bin][chr]+=segs[chr][x]
+					#break
 	o=[]
 	for bin in bins:
 		oo=[]
@@ -370,3 +392,4 @@ print name + "\t" + groups[name] + "\tlineamps\t" + bin_contigs(lines,500000,amp
 amp_bins=[3,6,15,30,72]
 amp_bins.sort(reverse=True)
 print name + "\t" + groups[name] + "\tsegs\t" + bin_segs(segs,amp_bins)
+
