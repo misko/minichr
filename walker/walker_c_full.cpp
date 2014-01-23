@@ -317,11 +317,11 @@ void edge_info::poisson() {
 		diffs[i]=(log(3+doc_ratio))*diffs[i];
 	}*/
 	//if (doc_ratio<=3.75) {
-	if (doc_ratio<=5) {
+	/*if (doc_ratio<=5) {
 		for (int i=0; i<SZ; i++) {
 			diffs[i]=(length/2000)*multiplier;
 		}
-	}
+	}*/
 
 	//make sure the min value is zero
 	double min=10e100;
