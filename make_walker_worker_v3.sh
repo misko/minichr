@@ -69,7 +69,7 @@ function mwalker {
 	cat ip_prob_q${i}sq${sq}_m${m}.lp.sol  | awk '{if ($2>0) {print $0}}' | grep "^c" | while read line; do 
 		z=`echo $line | awk '{print $1}'`_m`echo $line | awk '{print $2}'`
 		echo $line | pypy /filer/misko/mini_chr/git/minichr/cplex/contigs_to_flow.py decompositions_q${i}sq${sq}_m${m}.loops | gzip > q${i}sq${sq}_m${m}_${z}.gz
-		pypy /filer/misko/mini_chr/git/minichr/walker/flow_to_graph_v2_noerror.py Qproblem_file_q${i}sq${sq}_m${m}.gz $z.gz ${m} 0 1000 > g_q${i}sq${sq}_m${m}_${z}
+		pypy /filer/misko/mini_chr/git/minichr/walker/flow_to_graph_v2_noerror.py Qproblem_file_q${i}sq${sq}_m${m}.gz q${i}sq${sq}_m${m}_${z}.gz ${m} 0 1000 > g_q${i}sq${sq}_m${m}_${z}
 	done
 
 	rm Qproblem_file_q${i}sq${sq}_m${m}.solved.tmp

@@ -47,12 +47,21 @@ while [ $candownload -eq 0 ]; do
 	max_downloads=`cat ${dwndir}/max_downloads`
 	sleep $[ ( $RANDOM % 60 )  + 1 ]
 	n=`ls ${dwndir} | wc -l`
+	echo waiting for download lock $n
 	if [ $n -lt ${max_downloads} ] ; then
 		touch ${dwndir}/$tid
 		candownload=1
 	fi
 done
 echo Have download lock...
+
+
+sp=`/bin/df -m /dupa-filer/  | grep dupa | awk '{print $3}'`
+while [ $sp -lt 1200000 ] ; do
+	sleep 60
+	echo waiting for space
+	sp=`/bin/df -m /dupa-filer/  | grep dupa | awk '{print $3}'`
+done
 
 python /filer/misko/mini_chr/git/minichr/get_analysis_ids.py downloadable.xml | while read line; do 
 	$c "analysis_id=${line}" -o get.xml

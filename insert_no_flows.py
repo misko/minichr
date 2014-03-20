@@ -110,7 +110,7 @@ genomic+=new_edges
 genomic.sort()
 
 gsup,gstp=score(genomic)
-print >> sys.stderr, float(gsu)/gst, float(gsup)/gstp
+print >> sys.stderr, float(gsu)/(gst+0.01), float(gsup)/(gstp+0.01)
 
 print title + " with HMM edges mincp" , min_cp, "minlen", min_len
 print str(genomic).replace(',','')
