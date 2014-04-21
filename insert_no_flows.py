@@ -18,6 +18,7 @@ genomic=[]
 h=open(g_lp_fn)
 line=h.readline()
 title="#"
+print >> sys.stderr, "READING" , g_lp_fn
 while line[0]=='#':
 	title=line.strip()
 	line=h.readline()

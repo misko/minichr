@@ -428,7 +428,7 @@ void read_links(char * filename) {
 void read_cov(char * filename, bool normal) {
 	cerr << "Reading coverage from file " << filename << endl;
 
-	FILE * fptr = fopen(filename,"r");
+	gzFile fptr = gzopen(filename,"r");
 	if (fptr==NULL) {
 		fprintf(stderr, "Failed to open file %s\n",filename);
 		exit(1);
@@ -459,8 +459,9 @@ void read_cov(char * filename, bool normal) {
 
 	
 	//the real read loop
-	while (!feof(fptr)) {
-		size_t read = fread(buffer+size_so_far,1,chunk,fptr);
+	while (!gzeof(fptr)) {
+		//size_t read = fread(buffer+size_so_far,1,chunk,fptr);
+		size_t read = gzread(fptr, buffer+size_so_far,chunk); 
 		size_so_far+=read;
 		cerr << "Read so far " << size_so_far << endl;
 

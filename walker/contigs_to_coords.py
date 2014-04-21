@@ -78,7 +78,7 @@ def read_problem_file(filename):
 				genomic_edges[(f,t)]=length
 			if (f,t) in somatic_edges:
 				print >> sys.stderr, "FAILED PRECONDITION"
-				sys.exit(1)
+				#sys.exit(1)
 	h.close()
 
 

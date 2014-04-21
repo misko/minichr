@@ -61,7 +61,7 @@ def read_problem_file(filename):
 				somatic_edges[(f,t)]=typ
 			if (f,t) in genomic_edges:
 				print >> sys.stderr, "FAILED PRECONDITION",line
-				sys.exit(1)
+				#sys.exit(1)
 		elif line[1]=='Genomic':
 			#genomid line
 			#c Genomic       chr2:8917257    chr2:8921728 cap length normal tumor
@@ -79,7 +79,7 @@ def read_problem_file(filename):
 				genomic_edges[(f,t)]=length
 			if (f,t) in somatic_edges:
 				print >> sys.stderr, "FAILED PRECONDITION"
-				sys.exit(1)
+				#sys.exit(1)
 	h.close()
 	
 

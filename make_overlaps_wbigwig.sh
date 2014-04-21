@@ -22,7 +22,7 @@ function moverlap {
 	pushd $wd
 	python $g/scripts/overlap.py 3000 ${wd}/normal_clusters/q0_cov0.txt.gz ${wd}/tumor_clusters/q0_cov5.txt.gz_200.gz  |  awk '{if (NF>4) {print $0}}' | awk '{d=$2-$5; if (d<0) {d=-d}; if ($3==$6 && $1==$4 && d<2000) { } else {print $0}}'  > $wd/nsubtract_centrosubtract_1000bp
 	cat $wd/nsubtract_centrosubtract_1000bp | sed 's/\(chr[^:]*\):\([0-9]*\)\([+-]\)\s\(chr[^:]*\):\([0-9]*\)\([+-]\)/\1\t\2\t\3\t\4\t\5\t\6/g' | awk '{OFS="\t"; type=0; if ($3=="+") {if ($6=="+") {type=0} else {type=2} } else { if ($6=="+") {type=3} else {type=1} }; print $1,$2,$5,type,$7,0,0,0.0,0,$4,"EDGE" }' > $wd/nsubtract_centrosubtract_1000bp_links
-	$g/hmm $wd/nsubtract_centrosubtract_1000bp_links ${wd}/tumor_cov ${wd}/normal_cov 0 > ${wd}/hmm
+	$g/hmm $wd/nsubtract_centrosubtract_1000bp_links ${wd}/tumor_cov.gz ${wd}/normal_cov.gz 0 > ${wd}/hmm
 
 	#compute the edge mapqs
         while read line; do 
