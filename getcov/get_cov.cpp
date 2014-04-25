@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <zlib.h>
+
 using namespace std;
 
 unsigned short get_chr(const char * s) {
@@ -32,11 +34,23 @@ int main (int argc, char ** argv) {
 
 	char * filename=argv[1];
 
-	FILE * fp =  fopen(filename,"wb");
+	/*FILE * fp =  fopen(filename,"wb");
 	if (fp==NULL) {
 		cerr<<"something terrible";
-		return 0;
-	}	
+		return 1;
+	}*/	
+
+	char buffer[100];
+	buffer[0]='\0';
+	strcat(buffer, filename);
+	strcat(buffer, ".gz");
+	gzFile *fi = (gzFile *)gzopen(buffer,"wb");
+	if (fi==NULL) {
+		cerr<<"something terrible";
+		return 1;
+	}
+
+	cerr << buffer << endl;
 
 	string chr,nucleo;
 	unsigned int pos;
@@ -49,10 +63,12 @@ int main (int argc, char ** argv) {
 		if (ichr==0 || ichr>25) {
 			continue;
 		} 
-		fwrite(&ichr,sizeof(unsigned short),1,fp);
-		fwrite(&pos,sizeof(unsigned int),1,fp);
-		fwrite(&dp,sizeof(unsigned short),1,fp);
+		gzwrite(fi,&ichr,sizeof(unsigned short));
+		gzwrite(fi,&pos,sizeof(unsigned int));
+		gzwrite(fi,&dp,sizeof(unsigned short));
 	}
+
+	gzclose(fi);
 
 
 }
