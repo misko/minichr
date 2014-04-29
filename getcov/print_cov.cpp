@@ -4,7 +4,13 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
+#include <zlib.h>
+#include <omp.h>
 using namespace std;
+
+int lengths[26];
+
+char ** fsta;
 
 unsigned short get_chr(const char * s) {
 	if (s[0]=='C' || s[0]=='c') {
@@ -16,7 +22,6 @@ unsigned short get_chr(const char * s) {
 		tmp[i]=s[i];
 	}
 	tmp[i]='\0';
-	cout << tmp << endl;	
 	if (strlen(tmp)>0) {
 		if (tmp[0]=='x' || tmp[0]=='X') {
 			return 23;
@@ -33,10 +38,49 @@ unsigned short get_chr(const char * s) {
 	}
 }
 
-void read_cov(char * filename, bool normal) {
+int gc(int chr, int pos, int size) {
+	int gc=0;
+	if (pos<=size || lengths[chr-1]<=(pos+size)) {
+		return -1;
+	}
+	for (int i=0; i<size-1; i++) {
+		char c = tolower(fsta[chr-1][pos+i-size/2]);
+		switch (c) {
+			case 'c':
+			case 'g':
+				gc++;
+				break;
+			case 'a':
+			case 't':
+				//meh
+				break;
+			case 'n':
+				//meh
+				return -1;
+				break;
+			default:
+				cerr << "unexpected got char " << c << " | " << chr << ":" << pos << ":" << size << endl;
+				return -1;
+				//exit(1);
+		}
+	}
+	return gc;
+} 
+
+long * read_cov(char * filename, bool normal, int bins) {
+	long * gcbins = (long*)malloc(sizeof(long)*bins);
+	if (gcbins==NULL) {
+		cerr << "something bad" << endl;	
+		exit(1);
+	}
+
+	for (int i=0; i<bins; i++) {
+		gcbins[i]=0;
+	}
+
 	cerr << "Reading coverage from file " << filename << endl;
 
-	FILE * fptr = fopen(filename,"r");
+	gzFile fptr = gzopen(filename,"r");
 	if (fptr==NULL) {
 		fprintf(stderr, "Failed to open file %s\n",filename);
 		exit(1);
@@ -44,7 +88,8 @@ void read_cov(char * filename, bool normal) {
 	
 	//find the size of one entry
 	size_t soe = sizeof(unsigned short)+sizeof(unsigned int)+sizeof(unsigned short);
-	size_t chunk = 30737418240L;
+	//size_t chunk = 30737418240L;
+	size_t chunk = 1024*1024*1024L;
 	size_t size_so_far = 0;
 	char * buffer = (char*) malloc(chunk);
 	if (buffer==NULL) {
@@ -54,14 +99,12 @@ void read_cov(char * filename, bool normal) {
 	
 	
 	//the real read loop
-	while (!feof(fptr)) {
-		size_t read = fread(buffer+size_so_far,1,chunk,fptr);
+	while (!gzeof(fptr)) {
+		size_t read = gzread(fptr,buffer+size_so_far,chunk);
 		size_so_far+=read;
 		cerr << "Read so far " << size_so_far << endl;
-
 		if (read==chunk) {
-			cerr << "REALLOC" << endl;
-			exit(1);
+			//cerr << "REALLOC" << endl;
 			buffer=(char*)realloc(buffer,size_so_far+chunk);
 			if (buffer==NULL) {
 				cerr << " FALLED TO REALLOC " << endl;
@@ -83,11 +126,47 @@ void read_cov(char * filename, bool normal) {
 	unsigned short chr=0;
 	unsigned int coord=0;
 	unsigned short cov=0;
+
 	
+	int threads=16;
+	omp_set_num_threads(threads); //omp_get_num_threads();
+
+	long skips=0;
+
+	long * t_skips=(long*)malloc(threads*sizeof(long));
+	if (t_skips==NULL) {
+		cerr << "someting bad" << endl;
+		exit(1);
+	}
+	for (int i=0; i<threads; i++) {
+		t_skips[i]=0;
+	}
+
+	long * t_gcbins = (long*)malloc(threads*sizeof(long)*bins);
+	if (t_gcbins==NULL) {
+		cerr << "something bad" << endl;	
+		exit(1);
+	}
+	for (int i=0; i<threads*bins; i++) {
+		t_gcbins[i]=0;	
+	}
+
+	cerr << "starting threading " << endl;
+
+	#pragma omp parallel for schedule(static,1)
 	for (unsigned int i=0; i<entries; i++) {
+		int tidx=omp_get_thread_num();
+		if (i%1000000==0) {
+			cerr << tidx << " of " << omp_get_num_threads() << " : " << i << " / " << entries << endl;
+		}
+		if (omp_get_num_threads()!=threads) {
+			cerr << "FAIL BAD" << endl;
+			exit(1);
+		}
 		char* base = buffer+i*soe;
-		chr=*((unsigned short *)base);
+		chr=(*((unsigned short *)base));
 		if (chr==0) {
+			t_skips++;
 			continue;
 		}
 		base+=sizeof(unsigned short);
@@ -95,9 +174,36 @@ void read_cov(char * filename, bool normal) {
 		base+=sizeof(unsigned int);
 		cov=*((unsigned short *)base);
 
+		int current_gc=gc(chr,coord,300);
+		
+		if (current_gc<0) {
+			t_skips[tidx]++;
+		} else {
+			t_gcbins[tidx*bins + current_gc]++;
+		}
+
 		total_coverage+=cov;
 	}
 
+	cerr << "merging " << endl;
+
+
+	for (int i=0; i<threads; i++) {
+		skips+=t_skips[i];
+	}
+	cerr << "SKIPPED: " << skips << endl;
+	for (int i=0; i<threads; i++) {
+		for (int j=0; j<bins; j++) {
+			gcbins[j]+=t_gcbins[i*bins+j];
+		}
+	}
+
+
+	cerr << "mereged" << endl;
+	for (int i=0; i<bins; i++) {
+		cout << gcbins[i] << "\t";
+	}
+	cout << endl;
 
 	double average=((double)total_coverage)/entries;
 
@@ -129,31 +235,41 @@ void read_cov(char * filename, bool normal) {
 
 	cerr << "total: " << total_coverage << endl;
 	free(buffer);
+
+	return gcbins;
 }
 
 
 char ** read_fasta(char * filename) {
-
-	char ** fsta = (char**)malloc(sizeof(char*)*26);
+	fsta = (char**)malloc(sizeof(char*)*26);
 	if (fsta==NULL) {
 		cerr << "NOT GOOD" << endl;
 		exit(1);
 	}
 
-	FILE * f = fopen(filename,"r");
+	gzFile  f = gzopen(filename,"r");
 	if (f==NULL) {
 		cerr << " NOT GOOD 2 " << endl;
 	}
 
 
-	char * ref = (char*)malloc(sizeof(char)*20000000000L);
+	char * ref = (char*)malloc(sizeof(char)*5000000000L);
 	if (ref==NULL) {
 		fprintf(stderr, "ERROR\n");
-		exit(1);
+		exit(2);
 	}
 
-	size_t ret = fread(ref,1,20000000000L,f);
+	cout << "-Reading reference" << endl;
+	size_t ret=0;
+	int inc=0;
+	inc = gzread(f,ref,20000000);
+	while (inc>0) {
+		ret+=inc;
+		inc = gzread(f,ref+ret,20000000);
+	}
+	//size_t ret = gzread(f,ref,20000000000L);
 	cout << "Read " << ret << " from ref" << endl;
+	cout << "+Done reading reference" << endl;
 
 
 	char * buffer = (char*)malloc(sizeof(char)*1000000000L);
@@ -169,35 +285,80 @@ char ** read_fasta(char * filename) {
 			}
 			continue;
 		} else if (ref[i]=='>') {
-			cerr << "HEADER " << get_chr(ref+i+1) << endl;
-			ichr=get_chr(ref+i+1);
-			in_header=true;
+			cerr << "-Found header line for chr " << get_chr(ref+i+1) << endl;
+			//copy out the old chromosome
 			if (ichr!=0) {
 				fsta[ichr-1]=(char*)malloc(sizeof(char)*(j+1));
 				if (fsta[ichr-1]==NULL) {
 					cerr << "MAJOR ERROR" << endl;
 					exit(1);
 				}
-				memcpy(fsta[ichr-1],buffer,(j+1)*sizeof(char));
+				memcpy(fsta[ichr-1],buffer,j*sizeof(char));
+				fsta[ichr-1][j]='\0';
+				cout << "+Processed chr " << ichr << " at index " << i << endl;
+				char  tmp[100];
+				memcpy(tmp,fsta[ichr-1]+1000000,99);
+				tmp[99]='\0';
+				cout << tmp << "...";
+				memcpy(tmp,&fsta[ichr-1][j-100],99);
+				tmp[99]='\0';
+				cout << tmp << endl;
+				lengths[ichr-1]=strlen(fsta[ichr-1]);
+				for (int x=0; x< lengths[ichr-1]; x++) {
+					switch(tolower(fsta[ichr-1][x])) {
+						case 'a':
+						case 'c':
+						case 't':
+						case 'g':
+						case 'n':
+							break;
+						default:
+							cerr << "unknown char |" << fsta[ichr-1][x] << "| at " << x << endl;
+					}
+				}		
 				j=0;
-				cout << "READ " << ichr << " " << i << endl;
+				
 			}
+			//start working on next chromsome
+			ichr=get_chr(ref+i+1);
+			in_header=true;
 		} else {
 			buffer[j++]=ref[i];
 		}
 	}
-			if (ichr!=0) {
-				fsta[ichr-1]=(char*)malloc(sizeof(char)*(i+1));
-				if (fsta[ichr-1]==NULL) {
-					cerr << "MAJOR ERROR" << endl;
-					exit(1);
-				}
-				memcpy(fsta[ichr-1],buffer,(i+1)*sizeof(char));
-				i=0;
-				cout << "READ " << ichr << " " << i << endl;
-			}
-	
+	if (ichr!=0) {
+		fsta[ichr-1]=(char*)malloc(sizeof(char)*(j+1));
+		if (fsta[ichr-1]==NULL) {
+			cerr << "MAJOR ERROR" << endl;
+			exit(1);
+		}
+		memcpy(fsta[ichr-1],buffer,j*sizeof(char));
+		fsta[ichr-1][j]='\0';
+		lengths[ichr-1]=strlen(fsta[ichr-1]);
+				for (int x=0; x< lengths[ichr-1]; x++) {
+					switch(tolower(fsta[ichr-1][x])) {
+						case 'a':
+						case 'c':
+						case 't':
+						case 'g':
+						case 'n':
+							break;
+						default:
+							cerr << "unknown char |" << fsta[ichr-1][x] << "| at " << x << endl;
+					}
+				}		
+		cout << "+Processed chr " << ichr << " at index " << i << endl;
+	}
+	cout << "Finished reference processing" << endl;
+	for (int i=0; i<24; i++) {
+		cerr << "chr"<< i+1 << lengths[i] << endl;
+	}
+	return fsta;	
 }
+
+
+
+
 
 int main (int argc, char ** argv) {
 	if (argc!=3) {
@@ -209,7 +370,7 @@ int main (int argc, char ** argv) {
 	char * fasta_filename=argv[2];
 
 	read_fasta(fasta_filename);
-	read_cov(coverage_filename,false);
+	read_cov(coverage_filename,false,300);
 
 }
 
