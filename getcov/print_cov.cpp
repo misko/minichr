@@ -10,6 +10,7 @@ using namespace std;
 
 int lengths[26];
 
+long reads_per_chr[26];
 char ** fsta;
 
 unsigned short get_chr(const char * s) {
@@ -96,7 +97,11 @@ long * read_cov(char * filename, bool normal, int bins) {
 		cerr << " FALLED TO MALLOC " << endl;
 		exit(1);
 	}
-	
+
+
+	for (int i=0; i<26; i++) {
+		reads_per_chr[i]=0;
+	}	
 	
 	//the real read loop
 	while (!gzeof(fptr)) {
@@ -132,6 +137,16 @@ long * read_cov(char * filename, bool normal, int bins) {
 	omp_set_num_threads(threads); //omp_get_num_threads();
 
 	long skips=0;
+
+	long * t_reads_per_chr = (long*)malloc(threads*sizeof(long)*26);
+	if (t_reads_per_chr==NULL) {
+		cerr << "whoops" << endl;
+		exit(1);
+	}
+
+	for (int i=0; i<threads*26; i++) {
+		t_reads_per_chr[i]=0;
+	}
 
 	long * t_skips=(long*)malloc(threads*sizeof(long));
 	if (t_skips==NULL) {
@@ -173,7 +188,9 @@ long * read_cov(char * filename, bool normal, int bins) {
 		coord=*((unsigned int *)base);
 		base+=sizeof(unsigned int);
 		cov=*((unsigned short *)base);
-
+		if (chr<26) {
+			t_reads_per_chr[tidx*26+ chr-1]+=cov;
+		}
 		int current_gc=gc(chr,coord,300);
 		
 		if (current_gc<0) {
@@ -196,12 +213,22 @@ long * read_cov(char * filename, bool normal, int bins) {
 		for (int j=0; j<bins; j++) {
 			gcbins[j]+=t_gcbins[i*bins+j];
 		}
+		for (int j=0; j<26; j++) {
+			reads_per_chr[j]+=t_reads_per_chr[i*26+j];
+		}
 	}
 
 
 	cerr << "mereged" << endl;
+	cout << "GC\t" ; 
 	for (int i=0; i<bins; i++) {
 		cout << gcbins[i] << "\t";
+	}
+	cout << endl;
+
+	cout << "RPC\t" ;
+	for (int i=0; i<26; i++) {
+		cout << reads_per_chr[i] << "\t";
 	}
 	cout << endl;
 
