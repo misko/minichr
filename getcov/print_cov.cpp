@@ -166,6 +166,17 @@ long * read_cov(char * filename, bool normal, int bins) {
 		t_gcbins[i]=0;	
 	}
 
+
+	//setup threading counts for total coverage
+	long * t_coverage = (long*)malloc(threads*sizeof(long)*bins);
+	if (t_coverage==NULL) {
+		cerr << "broke" << endl;
+		exit(1);
+	}
+	for (int i=0; i<threads; i++) {
+		t_coverage[i]=0;
+	}
+
 	cerr << "starting threading " << endl;
 
 	#pragma omp parallel for schedule(static,1)
@@ -199,11 +210,16 @@ long * read_cov(char * filename, bool normal, int bins) {
 			t_gcbins[tidx*bins + current_gc]++;
 		}
 
-		total_coverage+=cov;
+		t_coverage[tidx]+=cov;
+		//total_coverage+=cov;
 	}
 
 	cerr << "merging " << endl;
 
+
+	for (int i=0; i<threads; i++){ 
+		total_coverage+=t_coverage[i];
+	}	
 
 	for (int i=0; i<threads; i++) {
 		skips+=t_skips[i];
