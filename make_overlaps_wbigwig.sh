@@ -41,7 +41,10 @@ function moverlap {
 	fi
 	$g/mapability/bigWigAverageOverBed $g/mapability/$ref/* nsubtract_centrosubtract_1000bp.bed nsubtract_centrosubtract_1000bp.bed.out
 	cat nsubtract_centrosubtract_1000bp.bed.out | awk '{print $1,$NF}' > nsubtract_centrosubtract_1000bp_mqs 
-	
+
+
+	$g/getcov/print_cov ${wd}/tumor_cov.gz > ${wd}/tumor_cov.gz.log
+	$g/getcov/print_cov ${wd}/normal_cov.gz > ${wd}/normal_cov.gz.log
 	# | sort | uniq > nsubtract_centrosubtract_1000bp_mqs
 	popd
 }

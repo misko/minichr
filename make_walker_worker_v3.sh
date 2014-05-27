@@ -57,12 +57,12 @@ function mwalker {
 	pypy /filer/misko/mini_chr/git/minichr/cplex/graph_c_to_lp_wsimple.py problem_file_q${i}sq${sq}_m${m}.gz el_q${i}sq${sq}_m${m}.gz nsubtract_centrosubtract_1000bp_mqs ${i} 20 ${m} Qproblem_file_q${i}sq${sq}_m${m}.tmp decompositions_q${i}sq${sq}_m${m}.loops > ip_prob_q${i}sq${sq}_m${m}.lp
 
 	#wait for IP solver
-	#touch ip_prob_q${i}sq${sq}_m${m}.lp.go
-	#while [ -e ip_prob_q${i}sq${sq}_m${m}.lp.go ] ; do
-	#	sleep $[ ( $RANDOM % 25 )  + 1 ]
-	#done
+	touch ip_prob_q${i}sq${sq}_m${m}.lp.go
+	while [ -e ip_prob_q${i}sq${sq}_m${m}.lp.go ] ; do
+		sleep $[ ( $RANDOM % 25 )  + 1 ]
+	done
 
-	/dupa-filer/misko/gurobi/gurobi550/linux64/bin/gurobi_cl MIPGap=0 ResultFile=ip_prob_q${i}sq${sq}_m${m}.lp.sol ip_prob_q${i}sq${sq}_m${m}.lp
+	#/dupa-filer/misko/gurobi/gurobi550/linux64/bin/gurobi_cl MIPGap=0 ResultFile=ip_prob_q${i}sq${sq}_m${m}.lp.sol ip_prob_q${i}sq${sq}_m${m}.lp
 	cat ip_prob_q${i}sq${sq}_m${m}.lp.sol  | grep c | awk '{if ($2>0) {print $0}}'  | pypy $g/cplex/contigs_to_flow.py decompositions_q${i}sq${sq}_m${m}.loops | gzip > ip_prob_q${i}sq${sq}_m${m}.lp.flow.gz
 	pypy $g/walker/flow_to_graph_v2_noerror.py Qproblem_file_q${i}sq${sq}_m${m}.gz ip_prob_q${i}sq${sq}_m${m}.lp.flow.gz ${m} 0 1000 > Qg_ip_q${i}sq${sq}_m${m}
 

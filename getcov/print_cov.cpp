@@ -128,12 +128,9 @@ long * read_cov(char * filename, bool normal, int bins) {
 
 	cout << "Finding the average" << endl;
 
-	unsigned short chr=0;
-	unsigned int coord=0;
-	unsigned short cov=0;
 
 	
-	int threads=16;
+	int threads=32;
 	omp_set_num_threads(threads); //omp_get_num_threads();
 
 	long skips=0;
@@ -182,7 +179,11 @@ long * read_cov(char * filename, bool normal, int bins) {
 	#pragma omp parallel for schedule(static,1)
 	for (unsigned int i=0; i<entries; i++) {
 		int tidx=omp_get_thread_num();
-		if (i%1000000==0) {
+		if (tidx>=threads) {
+			cerr <<  "EMERGENCY STOP" << endl;
+			exit(1);
+		}
+		if (i%10000000==tidx) {
 			cerr << tidx << " of " << omp_get_num_threads() << " : " << i << " / " << entries << endl;
 		}
 		if (omp_get_num_threads()!=threads) {
@@ -190,17 +191,20 @@ long * read_cov(char * filename, bool normal, int bins) {
 			exit(1);
 		}
 		char* base = buffer+i*soe;
-		chr=(*((unsigned short *)base));
+		unsigned short chr=(*((unsigned short *)base));
 		if (chr==0) {
 			t_skips++;
 			continue;
 		}
 		base+=sizeof(unsigned short);
-		coord=*((unsigned int *)base);
+		unsigned int coord=*((unsigned int *)base);
 		base+=sizeof(unsigned int);
-		cov=*((unsigned short *)base);
+		unsigned short cov=*((unsigned short *)base);
 		if (chr<26) {
 			t_reads_per_chr[tidx*26+ chr-1]+=cov;
+		}
+		if (chr>25) {
+			cerr << "WHAT CHR" << chr << endl;
 		}
 		int current_gc=gc(chr,coord,300);
 		
@@ -255,14 +259,14 @@ long * read_cov(char * filename, bool normal, int bins) {
 	cout << "Average is " << average << " , now finding stddev" << endl;	
 	for (unsigned int i=0; i<entries; i++) {
 		char* base = buffer+i*soe;
-		chr=*((unsigned short *)base);
+		unsigned short chr=*((unsigned short *)base);
 		if (chr==0) {
 			continue;
 		}
 		base+=sizeof(unsigned short);
-		coord=*((unsigned int *)base);
+		unsigned int coord=*((unsigned int *)base);
 		base+=sizeof(unsigned int);
-		cov=*((unsigned short *)base);
+		unsigned short cov=*((unsigned short *)base);
 
 
 		sum+=(cov-average)*(cov-average)/entries;
