@@ -43,6 +43,9 @@ def chr_to_n(c):
 		return 23
 	if c[0]=='y':
 		return 24
+	if c[0]=='m':
+		#print >> sys.stderr, "ENABLED CHR25!"
+		return 25
 	return int(c)
 
 #read in the hmm

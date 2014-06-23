@@ -28,6 +28,9 @@ def to_chr(s):
 			return 23
 		if s=='y':
 			return 24
+		if s=='m':
+			#print >> sys.stderr, "CHRM is enabeled"
+			return 25
 	return int(s)
 
 if len(sys.argv)!=9:
@@ -357,6 +360,8 @@ def bin_segs(segs,bins):
 				oo.append("X/%d" % (segs_bin[bin][chr]))
 			elif chr==24:
 				oo.append("Y/%d" % (segs_bin[bin][chr]))
+			elif chr==25:
+				oo.append("M/%d" % (segs_bin[bin][chr]))
 			else:
 				oo.append("%d/%d" % (chr,segs_bin[bin][chr]))
 		if len(oo)==0:

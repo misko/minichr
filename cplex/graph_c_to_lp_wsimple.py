@@ -51,8 +51,9 @@ def read_oe(fn):
 	h=open(fn)
 	for line in h:
 		line=line.strip().split()
-		if line[0][:5]=="chr25":
-			continue
+		print >> sys.stderr, "CHR25 is enabled!"
+		#if line[0][:5]=="chr25":
+		#	continue
 		f=line[0]
 		mq=float(line[1])
 		#mq=min(35,float(line[1])) #this is for MAPQ 

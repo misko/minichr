@@ -1,3 +1,4 @@
+#!/usr/bin/python
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -7,20 +8,30 @@ import sys
 
 def get_fractions(f):
 	h=open(f)
-	counts=[]
-	lines=h.readlines()
-	for x in xrange(len(lines)):
-		line=lines[x].strip()
-		if line=="Finding the average" and x<len(lines)-1:
-			try:
-				counts=map(lambda x : int(x), lines[x+1].strip().split())
-				s=sum(counts)
-				for x in xrange(len(counts)):
-					counts[x]/=float(s)
-			except:
-				pass
+	gc_counts=[]	
+	rpc_counts=[]
+	cov=0
+	for l in h:
+		l=l.strip().split()
+		if l[0]=="GC":
+			gc_counts=map(lambda x : int(x), l[1:])
+			s=sum(gc_counts)
+			for x in xrange(len(gc_counts)):
+				if s!=0:
+					gc_counts[x]/=float(s)
+				else:
+					gc_counts[0]=0
+		elif l[0]=="RPC":
+			rpc_counts=map(lambda x : int(x), l[1:-1])
+			s=sum(rpc_counts)
+			cov=s
+			for x in xrange(len(rpc_counts)):
+				if s!=0:
+					rpc_counts[x]/=float(s)
+				else:
+					rpc_counts[x]=0
 	h.close()
-	return counts
+	return (gc_counts,rpc_counts,cov)
 
 if len(sys.argv)!=4:
 	print "%s normal tumor fig_file" % sys.argv[0]
@@ -35,19 +46,18 @@ if fig_filename[-3:]!='png':
 	sys.exit(1)
 
 
-normal=get_fractions(normal_filename)
-tumor=get_fractions(tumor_filename)
+gc_normal,rpc_normal,cov_normal=get_fractions(normal_filename)
+gc_tumor,rpc_tumor,cov_tumor=get_fractions(tumor_filename)
 
 diffs=[]
 
-for x in range(len(normal)):
-	diffs.append(abs(normal[x]-tumor[x]))
+for x in range(len(gc_normal)):
+	diffs.append(abs(gc_normal[x]-gc_tumor[x]))
 
 
 x = range(len(diffs))
 plt.scatter(x, diffs,color='black')
-plt.scatter(x, tumor,color='red')
-plt.scatter(x, normal,color='blue')
+plt.scatter(x, gc_tumor,color='red')
+plt.scatter(x, gc_normal,color='blue')
 plt.savefig(fig_filename)
-
-print sum(diffs)
+print sum(diffs),min(rpc_normal),min(rpc_tumor),cov_normal,cov_tumor,max(float(cov_tumor)/float(cov_normal),float(cov_normal)/float(cov_tumor))

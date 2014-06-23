@@ -255,6 +255,8 @@ def compute_stats(tumor,col):
 pr_cutoff=0.005
 #pr_cutoff=0.5
 
+from math import log
+
 #print tumors_vs_genes
 genes_used={}
 probs={}
@@ -271,31 +273,42 @@ for x in range(cols):
 	genes=list(genes)
 	genes.sort()
 	print "Tumor\tGenes"
+	hhbins={}
+	mn=10000
+	mx=-10000
 	for tumor in tumors_vs_genes[x]:
 		#over tumor
 		#ps=compute_stats(tumor,x)
 		#probs[x][tumor]=ps
 		#over genes
-		if tumor not in probs[x]:
-			probs[x][tumor]={}
-		print tumor+"("+str(len(cancers[tumor]))+")\t",
-		l_genes=[]
+		hbins={}
 		for gene in genes:
 			if gene in tumors_vs_genes[x][tumor]:
+				#lets make a histogram		
 				#over tumor
 				#pr=ps[tumors_vs_genes[x][tumor][gene]]
 				#over genes
-				pr=compute_stats_by_gene(tumor,x,gene) # over gene
-				probs[x][tumor][gene]=pr
-				if pr<pr_cutoff:
-					l_genes.append((tumors_vs_genes[x][tumor][gene],pr,gene))
-		l_genes.sort(reverse=True)
-		if x not in genes_used:
-			genes_used[x]=set()
-		genes_used[x].update(set(map( lambda x : x[2], l_genes)))
-		#print simplify(l_genes)
-		print simplify_pr(l_genes)
-#sys.exit(1)
+				#prk=compute_stats_by_gene(tumor,x,gene)
+				pr=round(log(compute_stats_by_gene(tumor,x,gene))/log(10),0) # over gene
+				#print pr,prk
+				if pr not in hbins:
+					hbins[pr]=0
+				hbins[pr]+=1
+		hhbins[tumor]=hbins
+		mn=min(min(hbins.keys()),mn)
+		mx=max(max(hbins.keys()),mx)
+	print mn,mx
+	for tumor in tumors_vs_genes[x]:
+		xx=mn
+		print tumor,"\t",
+		while xx<=mx:
+			if xx in hhbins[tumor]:
+				print hhbins[tumor][xx],"\t",
+			else:
+				print "\t",		
+			xx+=1
+		print ""
+sys.exit(1)
 #print genes_vs_tumors
 for x in range(cols):
 	print "###################"

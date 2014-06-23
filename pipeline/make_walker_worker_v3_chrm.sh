@@ -23,7 +23,16 @@ function mwalker {
 	i=$1
 	sq=$2
 	m=$3
-	pushd $wd	
+	pushd $wd
+	#sed out the chr25
+	sed -i 's/chr25/chrM/g' hmm
+	sed -i 's/chr25/chrM/g' nsub*
+
+	#remake the mqs	
+        ref=`python $g/get_ref.py downloadable.xml | awk '{print $NF}' | head -n 1`
+        $g/mapability/bigWigAverageOverBed $g/mapability/$ref/* nsubtract_centrosubtract_1000bp.bed nsubtract_centrosubtract_1000bp.bed.out
+        cat nsubtract_centrosubtract_1000bp.bed.out | awk '{print $1,$NF}' > nsubtract_centrosubtract_1000bp_mqs 
+
 	#$g/walker/walker_c $wd/nsubtract_centrosubtract_1000bp ${wd}/hmm N 0 ${m} 2 > walker_out_q${i}sq${sq}_m${m}
 	#$g/walker/walker_c_v2 $wd/nsubtract_centrosubtract_1000bp ${wd}/hmm N 0 ${m} 2 > walker_out_q${i}sq${sq}_m${m}
 	$g/walker/walker_new $wd/nsubtract_centrosubtract_1000bp ${wd}/hmm N 0 ${m} 2 > walker_out_q${i}sq${sq}_m${m}
